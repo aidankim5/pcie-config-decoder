@@ -1,10 +1,12 @@
 """Command line: decode, all, list, dump.
 
-Built so far: `decode` prints the header (module 2), the standard capability
-chain and the --annotate view (module 3), the Power Management, MSI and MSI-X
-registers (module 4; --json carries them under 'decoded'), and with --hex the
-raw bytes (module 1). Everything else says plainly that it is not built yet
-instead of printing something that looks decoded.
+Layer 1 is complete: `decode` prints the header (module 2), the standard
+capability chain and --annotate view (module 3), the Power Management, MSI and
+MSI-X registers (module 4), the PCI Express capability (module 5), the
+extended chain (module 6), AER (module 7), and with --hex the raw bytes
+(module 1); `all` runs the same over every device of a full lspci listing
+(module 8). --json gives the same as plain dicts. `list` and `dump` are the
+Windows layers and say plainly that they are not built yet.
 
 Exit codes (a choice, not spec):
   0  done
@@ -17,13 +19,14 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from pathlib import Path
 
 from .aer import ROOT_PORT_TYPES, decode_aer
 from .caps import Capability, CapabilityChain, walk_standard_caps
 from .extcaps import ExtendedChain, decode_extended_registers, l1ss_summary, ltr_summary, walk_extended_caps
 from .header import decode_header
 from .msi import decode_msi, decode_msix
-from .parse import ConfigSpace, ParseError, load_config_space
+from .parse import ConfigSpace, ParseError, decode_text, load_config_space, looks_like_lspci_text, parse_lspci_all
 from .pcie_cap import decode_pcie_capability
 from .pm import decode_power_management
 from .render import (
@@ -66,6 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     a = sub.add_parser("all", help="decode every device in a full `lspci -vvv -xxxx` listing")
     a.add_argument("file")
+    a.add_argument("--json", action="store_true", help="a JSON list, one document per device")
 
     sub.add_parser("list", help="Windows only: one row per PCI function with link speed/width")
 
@@ -229,8 +233,34 @@ def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None, is_root: 
     }
 
 
-def cmd_decode(args: argparse.Namespace) -> int:
-    cs = load_config_space(args.file)
+def decode_document(cs: ConfigSpace) -> dict:
+    """One function's whole decode as plain dicts, for --json.
+
+    asdict turns each dataclass (and its nested Bit/Bar lists) into dicts and
+    lists, the only things json.dumps can write. JSON has no hex literal, so
+    4318 here is 0x10DE (a choice; hex strings would be the alternative).
+    Properties are not fields, so the derived values are added by name in the
+    *_as_json helpers.
+    """
+    header = decode_header(cs)
+    chain = walk_standard_caps(cs) if header.function_present else None
+    max_width, is_root = pcie_facts(cs, chain)
+    ext = walk_extended_caps(cs, max_width) if header.function_present else None
+    return {
+        "source": cs.source,
+        "bdf": cs.bdf,
+        "description": cs.description,
+        "size": cs.size,
+        "frame": cs.frame,
+        "header": asdict(header),
+        "standard_capabilities": chain_as_json(cs, chain),
+        "extended_capabilities": extended_chain_as_json(cs, ext, is_root),
+    }
+
+
+def render_device(cs: ConfigSpace, annotate: bool = False, hex_dump: bool = False) -> str:
+    """The full text decode of one function: source, header, both chains, then the
+    teaching view and the raw bytes when asked (bytes last, like lspci -xxxx)."""
     header = decode_header(cs)
     # Vendor ID FFFFh means no Function (7.5.1.1.1): the bytes are all ones, so 34h is not a
     # pointer and the walk is skipped.
@@ -238,40 +268,54 @@ def cmd_decode(args: argparse.Namespace) -> int:
     max_width, is_root = pcie_facts(cs, chain)
     ext = walk_extended_caps(cs, max_width) if header.function_present else None
 
-    if args.json:
-        # asdict turns the dataclass (and its nested Bit/Bar lists) into plain dicts and lists,
-        # the only things json.dumps can write. JSON has no hex literal, so 4318 here is 0x10DE
-        # (a choice; hex strings would be the alternative). Properties are not fields, so the
-        # derived values are added by name in the *_as_json helpers.
-        doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
-        doc["standard_capabilities"] = chain_as_json(cs, chain)
-        doc["extended_capabilities"] = extended_chain_as_json(cs, ext, is_root)
-        print(json.dumps(doc, indent=2))
-        return OK
-
-    print("\n".join(describe_source(cs)))
-    print(render_header(header))
+    parts = ["\n".join(describe_source(cs)), render_header(header)]
     if chain is not None:
-        print()
-        print(render_chain(chain))
+        parts.append(render_chain(chain))
         if chain.entries:
-            print()
-            print(render_capabilities(cs, chain))
+            parts.append(render_capabilities(cs, chain))
     if ext is not None:
-        print()
-        print(render_extended_chain(ext))
+        parts.append(render_extended_chain(ext))
         if ext.entries:
-            print()
-            print(render_extended_capabilities(cs, ext, is_root))
-    if args.annotate and chain is not None:
-        print()
-        print(render_annotated(cs, chain))
+            parts.append(render_extended_capabilities(cs, ext, is_root))
+    if annotate and chain is not None:
+        parts.append(render_annotated(cs, chain))
         if ext is not None and ext.present:
+            parts.append(render_annotated_extended(cs, ext))
+    if hex_dump:
+        parts.append(render_hex(cs.data))
+    parts[0] = parts[0] + "\n" + parts[1]  # the source lines and the header share one block
+    del parts[1]
+    return "\n\n".join(parts)
+
+
+def cmd_decode(args: argparse.Namespace) -> int:
+    cs = load_config_space(args.file)
+    if args.json:
+        print(json.dumps(decode_document(cs), indent=2))
+    else:
+        print(render_device(cs, annotate=args.annotate, hex_dump=args.hex))
+    return OK
+
+
+def cmd_all(args: argparse.Namespace) -> int:
+    """Every device in a full `lspci -vvv -xxxx` listing, one after another (or a JSON list)."""
+    text = Path(args.file).read_bytes()
+    decoded = decode_text(text)
+    if decoded is None or not looks_like_lspci_text(decoded):
+        raise ParseError(f"{args.file}: not an lspci text listing")
+    devices = parse_lspci_all(decoded, source=str(args.file))
+    if not devices:
+        raise ParseError(f"{args.file}: no device with hex rows found")
+    if args.json:
+        print(json.dumps([decode_document(cs) for cs in devices], indent=2))
+        return OK
+    for n, cs in enumerate(devices):
+        if n:
             print()
-            print(render_annotated_extended(cs, ext))
-    if args.hex:  # like lspci -xxxx: the decoded view first, then the raw bytes
-        print()
-        print(render_hex(cs.data))
+            print("=" * 100)
+            print()
+        print(render_device(cs))
+    print(f"\n# {len(devices)} device(s) decoded from {args.file}", file=sys.stderr)
     return OK
 
 
@@ -281,6 +325,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "decode":
             return cmd_decode(args)
+        if args.cmd == "all":
+            return cmd_all(args)
         print(f"pcicfg {args.cmd}: not built yet", file=sys.stderr)
         return NOT_YET
     except (ParseError, OSError, IndexError) as e:

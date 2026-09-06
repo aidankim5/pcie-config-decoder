@@ -26,6 +26,15 @@ Done so far:
 4. **pm and msi**: Power Management, MSI and MSI-X registers, one line each
    with the relative offset first and the absolute offset after it; `--json`
    carries them under `decoded`.
+5. **pcie_cap**: the PCI Express capability, all 22 registers as bit tables,
+   with lspci's "(downgraded)" when the link runs below its capability.
+6. **extcaps**: the extended chain from 100h, and full decodes of Power
+   Budgeting, LTR, L1 PM Substates, Secondary PCIe, Data Link Feature,
+   Physical Layer 16 GT/s, Lane Margining and the Vendor-Specific header.
+7. **aer**: Advanced Error Reporting, every register, the Header Log in the
+   spec's byte order, and a one-line health summary.
+8. **render and cli**: `pcicfg all` over a full `lspci -vvv -xxxx` listing,
+   `--json` for everything, `decode` exits 0.
 
 Taught vs ahead (expanded in the final README): taught = Type 0 header,
 standard and extended capability chains, PCI Express capability, AER, MSI

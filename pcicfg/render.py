@@ -308,7 +308,7 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
 # --- module 5: the PCI Express capability ----------------------------------------------
 
 def is_reserved_field(name: str) -> bool:
-    return name.startswith(("RsvdP", "RsvdZ", "Undefined"))
+    return name.startswith(("RsvdP", "RsvdZ", "Reserved", "Undefined"))
 
 
 def render_register_lines(base: int, r: Register, collapse_note: str = "") -> list[str]:
