@@ -374,23 +374,34 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_dump(args: argparse.Namespace) -> int:
-    """Layer 3: raw configuration-space bytes of one Function, or the exact reason there are none.
+    """Layer 3: raw configuration-space bytes of one Function, then decode them.
 
-    The read needs a signed kernel driver (see pcicfg/win/raw.py). When it
-    cannot happen, this prints what was tried, what stopped it and the two
-    other ways to get the same bytes, and exits 3 rather than pretending.
+    The read needs a signed kernel driver (see pcicfg/win/raw.py). When one is
+    present (RW-Everything), this reads the 4096-byte frame, writes it if -o was
+    given, and decodes it in place. When none is, it prints what was tried, what
+    stopped it and how else to get the bytes, and exits 3 rather than pretending.
     """
-    from .win.raw import parse_bdf, probe_pawnio, report  # imported here: Windows only
+    from .win.raw import dump_config_space, parse_bdf, probe_pawnio, report  # imported here: Windows only
 
     try:
         parse_bdf(args.bdf)
     except ValueError as e:
         print(f"pcicfg dump: {e}", file=sys.stderr)
         return BAD_INPUT
-    print(report(probe_pawnio(), args.bdf))
+
+    outcome = dump_config_space(args.bdf)
+    if outcome.data is None:
+        print(report(probe_pawnio(), args.bdf))
+        if args.output:
+            print(f"Nothing was written to {args.output}.", file=sys.stderr)
+        return NOT_YET
+
     if args.output:
-        print(f"Nothing was written to {args.output}.", file=sys.stderr)
-    return NOT_YET
+        Path(args.output).write_bytes(outcome.data)
+        print(f"# wrote {len(outcome.data)} bytes to {args.output} via {outcome.method}", file=sys.stderr)
+    cs = ConfigSpace(data=outcome.data, source=outcome.method, origin="raw image", bdf=args.bdf)
+    print(render_device(cs))
+    return OK
 
 
 def main(argv: list[str] | None = None) -> int:

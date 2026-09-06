@@ -4,28 +4,42 @@ What this tool tried, and what it found:
   PawnIOLib.dll   loaded from C:\Program Files\PawnIO\PawnIOLib.dll, driver library version 2.0.0
   pawnio_open     failed, 0x80070005 (Access is denied)
   this process    not elevated (run the terminal as Administrator to change this)
+  ECAM address    physical 0xC0100000 (from the ACPI MCFG table; reading it needs ring 0)
 
 Blocked by: pawnio_open returned 0x80070005 (Access is denied); this process is not elevated, and the driver's device object needs an elevated one.
 
 Why a driver at all: reading configuration space means either port I/O to CF8h/CFCh
 (spec 7.2.1, 256 bytes per Function) or mapping the ECAM window in physical memory
-(spec 7.2.2, the full 4096 bytes). Both are ring 0. This project does not enable test
-signing, does not turn off Memory Integrity and does not load an unsigned driver, so a
-signed driver with a signed module is the only route, and no official PawnIO module
-exposes a generic configuration-space read.
+(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a signed driver has to do it.
+PawnIO is signed and loads here, but its release build runs only modules its author
+signed, and none of those reads generic configuration space; a self-signed module needs
+the test-signed build, which this project will not enable.
 
-Two ways to get the same bytes today:
+Ways to get the bytes, best first (verified against Microsoft's docs and
+driver-blocklist, and against each tool's own source):
 
-1. RW-Everything (rweverything.com), a signed Windows tool with its own signed
-   driver. Open it, pick the device in PCI view, and use its per-device save to
-   write a .bin or a text dump. `pcicfg decode <file>` reads either: a raw
-   256- or 4096-byte image, or lspci-style hex rows.
+1. RW-Everything (rweverything.com), the recommended path. It installs a signed
+   driver and keeps Memory Integrity, Secure Boot and signature enforcement on;
+   nothing is test-signed. Two ways to use it:
+     - `pcicfg dump <BDF>` drives its command-line build (Rw.exe) for you, when
+       it is installed and you run the terminal as Administrator.
+     - Or open the GUI, pick the device in PCI view, and use its per-device Save
+       to write a .bin; then `pcicfg decode <file>`. A PCIe device saves the
+       full 4096 bytes.
 
-2. An Ubuntu live USB on the same machine, which needs no install:
+2. An Ubuntu live USB on the same machine, no install, no Windows changes:
        sudo lspci -vvv -xxxx -s 01:00.0 > rtx3060ti_01-00.0.txt
        sudo cat /sys/bus/pci/devices/0000:01:00.0/config > 01-00.0.config
-   The first is what the fixtures in this repo are. The second is the raw
+   The first is what the fixtures in this repo are; the second is the raw
    4096-byte ECAM frame. Copy either to Windows and decode it there.
 
-For link speed, width, payload sizes and the AER masks without any dump at all,
-`pcicfg list` reads what Windows already knows (see pcicfg/win/enum.py).
+Deliberately not used, and why: enabling Windows kernel-debug mode (bcdedit
+/debug on) lets Microsoft's own signed kldbgdrv.sys read config space, but it
+is a boot-level security change and needs a reboot. Drivers like WinRing0,
+InpOut32 and the ASUS AsIO family can do it too, but they are on Microsoft's
+vulnerable-driver blocklist and are refused while Memory Integrity is on. Test
+signing and a self-signed driver are off the table by design.
+
+For link speed, width, payload sizes and the AER masks with no dump and no
+driver at all, `pcicfg list` reads what Windows already knows (see
+pcicfg/win/enum.py).

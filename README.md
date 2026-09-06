@@ -20,7 +20,7 @@ where it appears.
 |---|---|---|
 | 1. Decoder core | Decodes a 256- or 4096-byte dump from a file. Standard library only, no OS calls. | `pcicfg/*.py` |
 | 2. Windows enumeration, no driver | `pcicfg list`: every PCI function with link speed, width and payload sizes, from the PnP properties Windows already publishes. | `pcicfg/win/enum.py` |
-| 3. Raw reads on Windows | `pcicfg dump <BDF>`: needs a signed kernel driver. It does not work on this machine, and says exactly why. | `pcicfg/win/raw.py` |
+| 3. Raw reads on Windows | `pcicfg dump <BDF>`: reads and decodes the 4096-byte frame through RW-Everything's signed driver when it is present; otherwise says exactly what it needs. | `pcicfg/win/raw.py` |
 
 Layer 1 is the part that matters and it ships. Layers 2 and 3 are about the
 Windows side of the same question: what can you learn about a link without
@@ -233,44 +233,72 @@ Both address calculations are implemented and tested in `pcicfg/win/raw.py`
 
 ---
 
-## 7. Layer 3: what raw reads would take, and why they do not happen here
+## 7. Layer 3: reading the raw bytes on Windows
 
 Both hardware paths above are ring 0. Port I/O to CF8h is a privileged
 instruction, and mapping the ECAM window means mapping physical memory. User
 mode cannot do either, so `pcicfg dump` needs a kernel driver.
 
-The rule I set for this project is that no unsigned driver gets loaded, test
-signing stays off, and Memory Integrity stays on. Memory Integrity is on here
-(`SecurityServicesRunning` includes 2, HVCI), and I am not turning it off for a
-side project. That leaves drivers Microsoft already signed. PawnIO
-(github.com/namazso/PawnIO) is one: a signed kernel driver that runs small
-signed Pawn modules, and it exposes exactly the native this needs,
-`pci_config_read_dword(bus, device, function, offset, out)`.
+I researched this exhaustively before settling on an answer, checking around
+thirty routes against Microsoft's own documentation and driver blocklist. The
+finding is worth stating plainly: **there is no way to read raw config space on
+Windows that keeps every security setting on, needs no driver, and needs no
+reboot.** Every route that returns bytes needs administrator rights plus one of:
+a third-party signed driver, or a boot into kernel-debug mode. There is no
+documented user-mode Windows API that hands back a device's raw configuration
+space. That is a real constraint of the platform, not a gap in the tool.
 
-`pcicfg dump` asks that driver three questions and reports what it finds,
-changing nothing:
+What a normal process *can* do, and what `pcicfg dump` does, is work out exactly
+where the bytes live. The firmware publishes each ECAM window's base in the ACPI
+MCFG table, and `GetSystemFirmwareTable` hands that table to user mode with no
+privilege. So the tool computes the precise physical address of any function's
+config space, for example `0xC0100000` for the GPU at 01:00.0. It still cannot
+read that address; knowing where the bytes are is not reading them, which is the
+whole reason a driver is needed.
+
+The rule for this project is that Memory Integrity and Secure Boot stay on, test
+signing stays off, and no unsigned or blocklisted driver is loaded. Under that
+rule the recommended path is **RW-Everything** (rweverything.com): a signed,
+purpose-built tool with its own signed driver that is not on Microsoft's
+vulnerable-driver blocklist, so it loads with Memory Integrity on. Installing it
+and running it is a person using a tool for its intended purpose, not a program
+smuggling in a driver.
+
+`pcicfg dump <BDF>` uses it two ways. If RW-Everything's command-line build
+(`Rw.exe`) is present and the terminal is elevated, the tool drives it, reads the
+full 4096-byte frame with one `RPCIE32` read per DWORD, and decodes the result in
+place, so `pcicfg dump 01:00.0` prints the same decode as `pcicfg decode` on a
+saved file. If it is not present, or the read fails, the tool prints what it
+tried and how to proceed, and exits 3 rather than pretending:
 
 ```
   PawnIOLib.dll   loaded from C:\Program Files\PawnIO\PawnIOLib.dll, driver library version 2.0.0
   pawnio_open     failed, 0x80070005 (Access is denied)
   this process    not elevated (run the terminal as Administrator to change this)
+  ECAM address    physical 0xC0100000 (from the ACPI MCFG table; reading it needs ring 0)
 ```
 
-Elevation alone would not finish it. A PawnIO module is a compiled Pawn program
-signed with a key the driver trusts, and every module in the official release is
-device-specific: SMBus controllers, MSRs, LPC, embedded controllers. None
-exposes a general configuration-space read. The driver build that accepts a
-module you signed yourself is the unrestricted one, which is test signed, and
-enabling test signing is the thing I said I would not do.
+PawnIO deserves a note because it is installed on my machine and it exposes
+exactly the native this needs, `pci_config_read_dword`. It does not work here,
+and the reason is precise: its release driver runs only modules its author
+signed, none of the official modules reads generic config space, and the build
+that would accept a module I signed myself is test-signed. So PawnIO is a dead
+end unless test signing is enabled, which it is not.
 
-That is the honest answer: the byte-level read needs a signed module from the
-driver's author, or a machine where test signing is acceptable. So `pcicfg dump`
-exits 3, writes nothing, and prints the two ways to get the same bytes today,
-which is how the fixtures in this repo were made:
+Two other ways to get the same bytes, and why the tool does not automate them:
 
-1. RW-Everything's per-device save, on Windows, with its own signed driver.
+1. RW-Everything's GUI Save, on Windows, writes a per-device `.bin`;
+   `pcicfg decode <file>` reads it. This is the guaranteed manual path.
 2. An Ubuntu live USB and `sudo lspci -vvv -xxxx -s <bdf>` or
-   `sudo cat /sys/bus/pci/devices/0000:<bdf>/config`.
+   `sudo cat /sys/bus/pci/devices/0000:<bdf>/config`. This is how the fixtures
+   in this repo were made.
+
+Kernel-debug mode (`bcdedit /debug on`) would let Microsoft's own signed
+`kldbgdrv.sys` read config space with no third-party driver, but it is a
+boot-level security change and needs a reboot, so it is documented here and not
+done automatically. Drivers like WinRing0, InpOut32 and the ASUS AsIO family can
+read config space too, but they are on the vulnerable-driver blocklist and are
+refused while Memory Integrity is on.
 
 And for link speed, width, payload sizes and the AER masks with no dump and no
 driver at all, layer 2 already works: `pcicfg list` reads the
