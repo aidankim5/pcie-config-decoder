@@ -79,6 +79,5 @@ def test_all_rejects_a_file_without_hex_rows(tmp_path, capsys):
     assert "not an lspci text listing" in capsys.readouterr().err
 
 
-def test_windows_layers_say_not_built_yet(capsys):
-    assert main(["list"]) == NOT_YET
+def test_layer_3_says_not_built_yet(capsys):
     assert main(["dump", "01:00.0"]) == NOT_YET

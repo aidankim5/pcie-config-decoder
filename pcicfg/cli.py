@@ -71,7 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("file")
     a.add_argument("--json", action="store_true", help="a JSON list, one document per device")
 
-    sub.add_parser("list", help="Windows only: one row per PCI function with link speed/width")
+    lst = sub.add_parser("list", help="Windows only: one row per PCI function with link speed/width, no driver")
+    lst.add_argument("--json", action="store_true", help="JSON instead of the table")
 
     du = sub.add_parser("dump", help="Windows only: raw config space of one function (Layer 3)")
     du.add_argument("bdf", help="bus:device.function, e.g. 01:00.0")
@@ -319,6 +320,25 @@ def cmd_all(args: argparse.Namespace) -> int:
     return OK
 
 
+def cmd_list(args: argparse.Namespace) -> int:
+    """Layer 2: the Windows PnP view of every PCI function (pcicfg/win/enum.py)."""
+    from .win.enum import functions_as_json, list_pci_functions, render_list  # imported here: Windows only
+
+    if sys.platform != "win32":
+        print("pcicfg list: reads Windows PnP device properties; on Linux use `lspci -vv` (LnkCap / LnkSta lines)", file=sys.stderr)
+        return BAD_INPUT
+    try:
+        functions = list_pci_functions()
+    except (RuntimeError, ValueError, OSError) as e:
+        print(f"pcicfg list: {e}", file=sys.stderr)
+        return BAD_INPUT
+    if args.json:
+        print(json.dumps(functions_as_json(functions), indent=2))
+    else:
+        print(render_list(functions))
+    return OK
+
+
 def main(argv: list[str] | None = None) -> int:
     # argv=None means "use the real command line"; tests pass a list instead.
     args = build_parser().parse_args(argv)
@@ -327,6 +347,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_decode(args)
         if args.cmd == "all":
             return cmd_all(args)
+        if args.cmd == "list":
+            return cmd_list(args)
         print(f"pcicfg {args.cmd}: not built yet", file=sys.stderr)
         return NOT_YET
     except (ParseError, OSError, IndexError) as e:

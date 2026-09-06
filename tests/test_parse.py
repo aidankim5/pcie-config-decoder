@@ -316,7 +316,7 @@ def test_cli_hex_block_is_lspci_exact(tmp_path, capsys):
 
 
 def test_cli_exit_codes(tmp_path, capsys):
-    assert main(["list"]) == 3
+    assert main(["dump", "01:00.0"]) == 3  # Layer 3 is not built yet
     assert main(["decode", str(tmp_path), "--hex"]) == 1  # a directory, not a file
     assert main(["decode", str(tmp_path / "missing.txt"), "--hex"]) == 1
     err = capsys.readouterr().err

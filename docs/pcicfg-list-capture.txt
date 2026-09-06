@@ -1,0 +1,29 @@
+# Windows PnP view, no driver: link speed/width are DEVPKEY_PciDevice_* properties the PCI
+# bus driver fills from Link Status / Link Capabilities (spec 7.5.3.8 / 7.5.3.6)
+00:00.0  8086:a700  ----  PCI standard host CPU bridge                 no PCI Express properties (host bridge)
+00:01.0  8086:a70d  0604  Intel(R) PCIe RC 010 G5 - A70D               Root Port (Windows reports no link properties for ports)
+00:06.0  8086:a74d  0604  Intel(R) PCIe RC 060 (x4) G4 - A74D          Root Port (Windows reports no link properties for ports)
+00:0a.0  8086:a77d  1180  Intel(R) Platform Monitoring Technology Driver no PCI Express link (conventional or integrated device)  MPS 128/128 MRRS 128
+00:0e.0  8086:a77f  0104  Intel RST VMD Controller A77F                no PCI Express link (conventional or integrated device)  MPS 128/128 MRRS 128
+00:14.0  8086:7a60  0c03  USB xHCI Compliant Host Controller           no PCI Express link (conventional or integrated device)
+00:14.2  8086:7a27  0500  Intel(R) Shared SRAM - 7A27                  no PCI Express link (conventional or integrated device)
+00:15.0  8086:7a4c  0c80  PCI Device                                   no PCI Express link (conventional or integrated device)
+00:15.1  8086:7a4d  0c80  PCI Device                                   no PCI Express link (conventional or integrated device)
+00:15.2  8086:7a4e  0c80  PCI Device                                   no PCI Express link (conventional or integrated device)
+00:16.0  8086:7a68  0780  Intel(R) Management Engine Interface #1      no PCI Express link (conventional or integrated device)
+00:17.0  8086:7a62  0106  Standard SATA AHCI Controller                no PCI Express link (conventional or integrated device)
+00:1a.0  8086:7a48  0604  Intel(R) PCI Express Root Port #25 - 7A48    Root Port (Windows reports no link properties for ports)
+00:1b.0  8086:7a40  0604  Intel(R) PCI Express Root Port #17 - 7A40    Root Port (Windows reports no link properties for ports)
+00:1c.0  8086:7a38  0604  Intel(R) PCI Express Root Port #1 - 7A38     Root Port (Windows reports no link properties for ports)
+00:1c.3  8086:7a3b  0604  Intel(R) PCI Express Root Port #4 - 7A3B     Root Port (Windows reports no link properties for ports)
+00:1d.0  8086:7a30  0604  Intel(R) PCI Express Root Port #9 - 7A30     Root Port (Windows reports no link properties for ports)
+00:1f.0  8086:7a04  0601  Intel(R) LPC Controller/eSPI Controller - 7A04 no PCI Express link (conventional or integrated device)
+00:1f.3  8086:7a50  0403  High Definition Audio Controller             no PCI Express link (conventional or integrated device)
+00:1f.4  8086:7a23  0c05  Intel(R) SMBus - 7A23                        no PCI Express link (conventional or integrated device)
+00:1f.5  8086:7a24  0c80  Intel(R) SPI (flash) Controller - 7A24       no PCI Express link (conventional or integrated device)
+01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+01:00.1  10de:228b  0403  High Definition Audio Controller             LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+02:00.0  144d:a80c  0108  Standard NVM Express Controller              LnkSta 16GT/s x4 (max 16GT/s x4)  MPS 256/512 MRRS 512
+03:00.0  1bb1:5016  0108  Standard NVM Express Controller              LnkSta 16GT/s x4 (max 16GT/s x4)  MPS 256/256 MRRS 512
+05:00.0  8086:272b  0280  Intel(R) Wi-Fi 7 BE202 160MHz                LnkSta 8GT/s x1 (max 16GT/s x1) downgraded  MPS 128/128 MRRS 512
+06:00.0  8086:125c  0200  Intel(R) Ethernet Controller I226-V          LnkSta 5GT/s x1 (max 5GT/s x1)  MPS 256/512 MRRS 512
