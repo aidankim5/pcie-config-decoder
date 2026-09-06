@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from pcicfg.cli import BAD_INPUT, NOT_YET, OK, main
+from pcicfg.win.kldbg import KldbgStatus
 from pcicfg.win.raw import (
     FRAME_BY_PATH,
     PawnIoStatus,
@@ -17,6 +18,11 @@ from pcicfg.win.raw import (
     probe_pawnio,
     report,
 )
+
+
+# A security-on path with nothing wrong with it, so the report falls through to
+# whatever PawnIO has to say. Used by the tests that pin that fallback wording.
+WORKING_KLDBG = KldbgStatus(platform_ok=True, debug_boot=True, elevated=True, service_present=True, opened=True)
 
 
 def test_bdf_parsing():
@@ -57,7 +63,7 @@ def test_the_two_paths_reach_different_frame_sizes():
 def test_report_names_the_blocker_and_both_alternatives():
     status = PawnIoStatus(dll_present=True, version="2.0.0", opened=False,
                           open_hresult=-2147024891, open_meaning="Access is denied", elevated=False)
-    text = report(status, "01:00.0")
+    text = report(status, "01:00.0", kldbg_status=WORKING_KLDBG)
     assert "no bytes read" in text and "0x80070005" in text and "not elevated" in text
     assert "RW-Everything" in text and "sudo lspci -vvv -xxxx -s 01:00.0" in text
     assert "/sys/bus/pci/devices/0000:01:00.0/config" in text
@@ -65,13 +71,27 @@ def test_report_names_the_blocker_and_both_alternatives():
 
 
 def test_report_when_the_library_is_missing():
-    text = report(PawnIoStatus(dll_present=False, dll_error="not found"), "01:00.0")
+    text = report(PawnIoStatus(dll_present=False, dll_error="not found"), "01:00.0", kldbg_status=WORKING_KLDBG)
     assert "not loadable" in text and "github.com/namazso/PawnIO" in text
 
 
 def test_report_when_pawnio_opens_but_no_module_exposes_config_reads():
-    text = report(PawnIoStatus(dll_present=True, version="2.0.0", opened=True, open_hresult=0, elevated=True), "01:00.0")
+    text = report(PawnIoStatus(dll_present=True, version="2.0.0", opened=True, open_hresult=0, elevated=True),
+                  "01:00.0", kldbg_status=WORKING_KLDBG)
     assert "pci_config_read_dword" in text and "test signed" in text
+
+
+def test_the_security_on_path_owns_the_blocker_line_when_it_is_the_one_missing():
+    """`pcicfg dump` tries kldbgdrv first, so when that is what is unavailable it is
+    what the user is told to fix -- not PawnIO, which is a recorded dead end."""
+    pawnio = PawnIoStatus(dll_present=True, opened=False, open_hresult=-2147024891,
+                          open_meaning="Access is denied", elevated=False)
+    needs_reboot = KldbgStatus(platform_ok=True, debug_boot=False, elevated=True, service_present=True)
+    text = report(pawnio, "01:00.0", kldbg_status=needs_reboot)
+    assert "Blocked by: this machine was not booted with kernel debugging enabled" in text
+    assert "debug boot      off" in text
+    # and with the security-on path healthy, PawnIO's own blocker is what is left to say
+    assert "Blocked by: pawnio_open returned" in report(pawnio, "01:00.0", kldbg_status=WORKING_KLDBG)
 
 
 def test_dump_exits_3_with_the_report_and_1_on_a_bad_bdf(capsys):

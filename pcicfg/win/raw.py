@@ -15,12 +15,17 @@ byte. The two hardware paths both need kernel privilege:
 
 So a driver has to do it. The rule for this project is that no unsigned driver
 is loaded, test signing stays off and Memory Integrity stays on, so the only
-candidate is a driver Microsoft already signed. PawnIO (github.com/namazso/PawnIO)
-is one: a signed kernel driver that runs small signed Pawn modules and exposes
-natives to them, `pci_config_read_dword(bus, device, function, offset, out)`
-among them. That native is exactly what this file wants.
+candidate is a driver Microsoft already signed.
 
-What the spike found on this machine, and why `pcicfg dump` does not read bytes:
+The one that works is Microsoft's own: kldbgdrv.sys, the Kernel Local Debugging
+Driver, in pcicfg/win/kldbg.py. It is signed by Microsoft, is not on the
+vulnerable-driver blocklist, and loads with Memory Integrity on. `pcicfg dump`
+tries it first; this file holds the address arithmetic it uses, the facts about
+what else could read these bytes, and the report printed when that path is not
+available. docs/security-on-path.md has the setup, the tradeoff and the undo.
+
+PawnIO (github.com/namazso/PawnIO) was the spike's first candidate and is a dead
+end, recorded here so it is not tried twice:
 
 1. PawnIO 2.2.0.0 is installed and its service is running, and PawnIOLib.dll
    loads and answers pawnio_version without any privilege.
@@ -33,10 +38,6 @@ What the spike found on this machine, and why `pcicfg dump` does not read bytes:
    is a small job, but the driver build that accepts a self-signed module is
    the "unrestricted" one, which is test signed, and enabling test signing is
    exactly what this project will not do.
-
-That is a real answer, not a missing feature: the byte-level read needs either
-a signed module from the driver's author or a machine where test signing is
-acceptable. Both alternatives below get the same bytes today.
 """
 
 import ctypes
@@ -56,25 +57,31 @@ FRAME_BY_PATH = {
 ALTERNATIVES = """Ways to get the bytes, best first (verified against Microsoft's docs and
 driver-blocklist, and against each tool's own source):
 
-1. An Ubuntu live USB on the same machine. No install, no Windows changes, and
+1. The security-on path this tool takes itself: Microsoft's signed
+   kldbgdrv.sys, which loads with Memory Integrity on and the vulnerable-driver
+   blocklist enforced. It costs one boot-level change, `bcdedit /debug on`, and
+   a reboot. docs/security-on-path.md has the exact commands, the tradeoff that
+   change carries, and how to undo it. When that is set up, `pcicfg dump
+   01:00.0` reads the bytes here, with no third-party driver at all.
+
+2. An Ubuntu live USB on the same machine. No install, no Windows changes, and
    it works whatever this machine's security settings are:
        sudo lspci -vvv -xxxx -s 01:00.0 > rtx3060ti_01-00.0.txt
        sudo cat /sys/bus/pci/devices/0000:01:00.0/config > 01-00.0.config
    The first is what the fixtures in this repo are; the second is the raw
    4096-byte ECAM frame. Copy either to Windows and `pcicfg decode <file>`.
 
-2. RW-Everything (rweverything.com), only on a machine with Memory Integrity
+3. RW-Everything (rweverything.com), only on a machine with Memory Integrity
    off. Its driver RwDrv.sys is on Microsoft's vulnerable-driver blocklist, so
    with Memory Integrity on it is refused at load and neither its GUI nor its
    command line reads a byte. Where it does load, save the device from its PCI
    view and `pcicfg decode <file>`; a PCIe device saves the full 4096 bytes.
+   docs/security-off-path.md writes this route out in full, and says what it
+   costs.
 
-Also possible, and why not here: Windows kernel-debug mode (bcdedit /debug on)
-lets Microsoft's own signed kldbgdrv.sys read config space with no third-party
-driver and Memory Integrity left on, but it is a boot-level change that needs a
-reboot. A driver you write yourself and get attestation-signed by Microsoft
-loads with Memory Integrity on, but signing needs a registered organization and
-an EV certificate (money and weeks). Test signing and loading an unsigned or
+A driver you write yourself and get attestation-signed by Microsoft also loads
+with Memory Integrity on, but signing needs a registered organization and an EV
+certificate (money and weeks). Test signing and loading an unsigned, renamed or
 blocklisted driver are off the table by design.
 
 For link speed, width, payload sizes and the AER masks with no dump and no
@@ -353,6 +360,7 @@ class DumpResult:
     data: bytes | None
     method: str = ""  # how the bytes were read, when they were
     reason: str = ""  # why not, when they were not
+    detail: object | None = None  # the kldbg.ConfigRead, when that path ran: how far each read reached
 
 
 def dump_config_space(bdf: str, size: int = 4096) -> DumpResult:
@@ -367,6 +375,24 @@ def dump_config_space(bdf: str, size: int = 4096) -> DumpResult:
     and RW-Everything loads is handled by decoding its saved dump instead.
     """
     parse_bdf(bdf)  # validate the address; raises ValueError on a bad one
+
+    # 1. The security-on path: Microsoft's own signed debug driver, which loads with
+    # Memory Integrity on and the blocklist enforced. It needs the machine booted with
+    # `bcdedit /debug on` and an elevated process; kldbg.probe() says which is missing.
+    if sys.platform == "win32":
+        from . import kldbg  # imported here so a non-Windows import of this module still works
+
+        status = kldbg.probe()
+        if status.usable:
+            try:
+                got = kldbg.read_config_space(bdf, size)
+            except OSError as e:
+                return DumpResult(None, reason=f"the kldbgdrv device opened but the read failed: {e}")
+            if got.data:
+                return DumpResult(got.data, method=got.method, detail=got)
+            return DumpResult(None, reason="kldbgdrv accepted the IOCTL but returned no bytes for this Function", detail=got)
+
+    # 2. No security-on path available: say why, then fall through to the routes that fit.
     if memory_integrity_enabled() and driver_blocklisted("RwDrv"):
         return DumpResult(None, reason="RwDrv.sys (RW-Everything) is on the active vulnerable-driver blocklist and Memory Integrity is on, so it cannot load here")
     if find_rw_everything() is None:
@@ -374,13 +400,28 @@ def dump_config_space(bdf: str, size: int = 4096) -> DumpResult:
     return DumpResult(None, reason="RW-Everything is installed; save the device from its GUI and run `pcicfg decode <file>`")
 
 
-def report(status: PawnIoStatus, bdf: str) -> str:
-    """What `pcicfg dump` prints instead of bytes: what was tried, what stopped it, what else to do."""
+def report(status: PawnIoStatus, bdf: str, kldbg_status=None) -> str:
+    """What `pcicfg dump` prints instead of bytes: what was tried, what stopped it, what else to do.
+
+    `kldbg_status` is the security-on path's state (a kldbg.KldbgStatus). It is
+    probed here when not given and this is Windows; passing one explicitly is
+    what the tests do, so the report is the same on any platform.
+    """
     lines = [
         f"pcicfg dump {bdf}: no bytes read.",
         "",
         "What this tool tried, and what it found:",
     ]
+    if kldbg_status is None and sys.platform == "win32":
+        from . import kldbg
+
+        kldbg_status = kldbg.probe()
+    kldbg_blocker = ""
+    if kldbg_status is not None:
+        from . import kldbg
+
+        lines += kldbg.report(kldbg_status)
+        kldbg_blocker = kldbg_status.blocker
     if status.dll_present:
         lines.append(f"  PawnIOLib.dll   loaded from {PAWNIO_DLL}" + (f", driver library version {status.version}" if status.version else ""))
     else:
@@ -409,16 +450,19 @@ def report(status: PawnIoStatus, bdf: str) -> str:
         lines.append(f"  RwDrv.sys        {'on the active vulnerable-driver blocklist' if blocked else 'not on the active blocklist'} (RW-Everything)")
     lines += [
         "",
-        f"Blocked by: {status.blocker}.",
+        # The security-on path is the one tried first, so its blocker is the one that matters.
+        # PawnIO's is the fallback answer only when this is not Windows at all.
+        f"Blocked by: {kldbg_blocker or status.blocker}.",
         "",
         "Why a driver at all: reading configuration space means either port I/O to CF8h/CFCh",
         "(spec 7.2.1, 256 bytes per Function) or mapping the ECAM window in physical memory",
-        "(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a driver has to do it. The",
-        "third-party drivers that would (RW-Everything's RwDrv.sys and its kin) are on Microsoft's",
-        "vulnerable-driver blocklist and are refused while Memory Integrity is on; PawnIO loads but",
-        "runs only modules its author signed, none of which reads generic config space. A driver",
-        "you write and get signed, or Microsoft's own debug driver via a reboot, would work; both",
-        "are described below.",
+        "(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a driver has to do it. Microsoft's",
+        "own signed kldbgdrv.sys does it with Memory Integrity left on and the vulnerable-driver",
+        "blocklist enforced, which is the route this tool takes first and route 1 below; it needs",
+        "the machine booted with kernel debugging enabled. The third-party drivers that would",
+        "otherwise do it (RW-Everything's RwDrv.sys and its kin) are on that blocklist and are",
+        "refused while Memory Integrity is on; PawnIO loads but runs only modules its author",
+        "signed, none of which reads generic config space.",
         "",
         ALTERNATIVES,
     ]

@@ -376,10 +376,14 @@ def cmd_list(args: argparse.Namespace) -> int:
 def cmd_dump(args: argparse.Namespace) -> int:
     """Layer 3: raw configuration-space bytes of one Function, then decode them.
 
-    The read needs a signed kernel driver (see pcicfg/win/raw.py). When one is
-    present (RW-Everything), this reads the 4096-byte frame, writes it if -o was
-    given, and decodes it in place. When none is, it prints what was tried, what
-    stopped it and how else to get the bytes, and exits 3 rather than pretending.
+    The read needs a kernel driver, because both hardware paths to configuration
+    space are ring 0 (see pcicfg/win/raw.py). The security-on path is tried
+    first: Microsoft's own signed kldbgdrv.sys, which loads with Memory
+    Integrity on and the vulnerable-driver blocklist enforced
+    (pcicfg/win/kldbg.py). When it reads, this prints how far each of its two
+    reads reached, writes the bytes if -o was given, and decodes them in place.
+    When it cannot, it prints what was tried, what stopped it and how else to
+    get the bytes, and exits 3 rather than pretending.
     """
     from .win.raw import dump_config_space, parse_bdf, probe_pawnio, report  # imported here: Windows only
 
@@ -399,9 +403,34 @@ def cmd_dump(args: argparse.Namespace) -> int:
     if args.output:
         Path(args.output).write_bytes(outcome.data)
         print(f"# wrote {len(outcome.data)} bytes to {args.output} via {outcome.method}", file=sys.stderr)
+    for line in describe_read(outcome):
+        print(line)
     cs = ConfigSpace(data=outcome.data, source=outcome.method, origin="raw image", bdf=args.bdf)
     print(render_device(cs))
     return OK
+
+
+def describe_read(outcome) -> list[str]:
+    """The '# ...' lines saying which access method read the bytes, and how far each reached.
+
+    The question this answers is the one the extended capabilities depend on:
+    whether the read got the 256-byte PCI-compatible frame (spec 7.2.1) or the
+    full 4096-byte extended frame (spec 7.2.2). Both numbers are measured, not
+    assumed: see kldbg.read_config_space.
+    """
+    lines = [f"# read by {outcome.method}"]
+    detail = outcome.detail
+    if detail is None:
+        return lines
+    lines.append(f"# got {detail.size} bytes: {detail.frame}")
+    if detail.bus_data_bytes:
+        lines.append(f"#   SysDbgReadBusData reached {detail.bus_data_bytes} bytes (HalGetBusDataByOffset)")
+    if detail.ecam_address is not None:
+        reached = f"reached {detail.physical_bytes} bytes" if detail.physical_bytes else "was refused"
+        lines.append(f"#   SysDbgReadPhysical at ECAM 0x{detail.ecam_address:X} {reached}")
+    for note in detail.notes:
+        lines.append(f"#   note: {note}")
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:
