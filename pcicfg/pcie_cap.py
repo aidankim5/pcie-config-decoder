@@ -23,11 +23,23 @@ widths, payload sizes, latencies, timeouts) come from the same tables. The
 code is laid out as those tables: one row per field, high bit, low bit, name,
 and how to read the value.
 
-Structure size (a choice, following Linux pci_regs.h): Capability Version 2
-or higher runs to +3Bh, 60 bytes, with the Slot 2 registers hardwired zero on
-Functions without slots; version 1 ends after Link Status (+13h, 20 bytes)
-or, for Root Complex Integrated Endpoints and Event Collectors that have no
-Link, after Device Status (+0Bh, 12 bytes).
+Structure size (a choice of this tool; the spec gives Figure 7-21 and no
+per-type size): for Capability Version 2 the whole 60-byte figure is read
+whatever the Device/Port Type, because registers a Function does not
+implement are hardwired to zero (page 718). Version 1 is the structure
+before the "2" registers existed: Endpoints end after Link Status (+13h,
+20 bytes) and Root Complex Integrated Endpoints, which have no Link, after
+Device Status (+0Bh, 12 bytes); those two are the sizes Linux pci_regs.h
+uses (PCI_CAP_EXP_ENDPOINT_SIZEOF_V1 = 20, RC_ENDPOINT_SIZEOF_V1 = 12).
+Ports and Event Collectors at version 1 run through Root Status (+23h,
+36 bytes), the last register a version-1 structure has. Linux stops version-2
+Endpoints earlier (52 bytes, RCiEPs 44) because an Endpoint has no Slot 2
+registers; this tool reads them anyway and shows them as zero.
+
+Layout rows below use `lambda v: ...`, a one-line function without a name:
+v is the field value and the expression after the colon is its text. It is
+used where a fixed dict of meanings is not enough (a number to print, or a
+sentence that depends on the value).
 """
 
 from dataclasses import dataclass
@@ -45,6 +57,8 @@ SUPPORTED_SPEEDS_VECTOR = [2.5, 5.0, 8.0, 16.0, 32.0]  # Table 7-33: vector bit 
 
 
 def speed_text(code: int) -> str:
+    # :g is the general number format: it drops a trailing .0, so 16.0 prints as 16 (lspci
+    # writes 16GT/s) while 2.5 keeps its fraction.
     if code in SPEED_GTS:
         return f"{SPEED_GTS[code]:g} GT/s"
     if code in (6, 7):
@@ -127,10 +141,12 @@ DOWNSTREAM_PRESENCE = {0: "Link Down, presence not determined", 1: "Link Down, c
 
 def speeds_vector_text(vector: int) -> str:
     """The Supported Link Speeds Vector as a list: bit n set -> SUPPORTED_SPEEDS_VECTOR[n]."""
+    # enumerate gives (0, 2.5), (1, 5.0), ... so n is the vector bit to test (as in pm.py pme_states).
     names = [f"{s:g}" for n, s in enumerate(SUPPORTED_SPEEDS_VECTOR) if bit(vector, n)]
+    text = (", ".join(names) + " GT/s") if names else "none"
     if bits(vector, 6, 5):
-        names.append("reserved bits 6:5 set")
-    return (", ".join(names) + " GT/s") if names else "none"
+        text += "; reserved bits 6:5 set"
+    return text
 
 
 # --- the generic register: a list of fields, as the spec tables are ------------------
@@ -163,7 +179,7 @@ class Register:
         for f in self.fields:
             if f.name == name:
                 return f
-        raise KeyError(name)
+        raise KeyError(name)  # the same error a dict gives for a missing key: a misspelled name fails loudly
 
     def value(self, name: str) -> int:
         return self.field(name).value
@@ -181,9 +197,14 @@ def decode_fields(raw: int, layout: list[tuple]) -> list[Field]:
     """
     out = []
     for row in layout:
+        # A row is a tuple of 4 or 5 items: hi, lo, name, how-to-read, and an optional note.
+        # row[:4] takes the first four; len(row) > 4 asks whether the fifth is there.
         hi, lo, name, fmt = row[:4]
         note = row[4] if len(row) > 4 else ""
         value = bits(raw, hi, lo)
+        # Three kinds of how-to-read: None = a single bit (+/-); a dict = a lookup table
+        # (dict.get returns the default when the code is missing); anything else is a
+        # function, so fmt(value) calls it with the value.
         if fmt is None:
             text = "+" if value else "-"
         elif isinstance(fmt, dict):
@@ -199,7 +220,14 @@ def make_register(key: str, name: str, section: str, offset: int, width: int, ra
 
 
 def hex_text(width: int):
-    """A how-to-read for raw numeric fields: print as hex of the field's own width."""
+    """A how-to-read for raw numeric fields: print as hex of the field's own width.
+
+    Returns a function: decode_fields calls it later with the field value.
+    digits is worked out once here and kept inside the returned lambda (Python
+    remembers the variables a function was made with). In the f-string the
+    inner {digits} is filled first, so with digits = 4 the format is :04x,
+    four zero-padded hex digits.
+    """
     digits = (width + 3) // 4  # 4 bits per hex digit, rounded up
     return lambda v: f"{v:0{digits}x}h"
 
@@ -231,10 +259,10 @@ DEVICE_CAPABILITIES = [
     (15, 15, "Role-Based Error Reporting", None),
     (16, 16, "ERR_COR Subclass Capable", None),
     (17, 17, "RsvdP", reserved_text),
-    (25, 18, "Captured Slot Power Limit Value", lambda v: f"{v}", "Upstream Ports only; Watts = value x scale"),
+    (25, 18, "Captured Slot Power Limit Value", lambda v: f"{v}", "Upstream Ports only; Watts = value x scale; F0h-F2h at scale 0 = 250/275/300 W (7.5.3.9)"),
     (27, 26, "Captured Slot Power Limit Scale", POWER_SCALE),
     (28, 28, "Function Level Reset Capability", None),
-    (31, 29, "RsvdP (bit 30 is TEE-IO Supported in later revisions)", reserved_text),
+    (31, 29, "RsvdP (bit 30 is TEE-IO Supported in later revisions)", reserved_text, "pci_regs.h PCI_EXP_DEVCAP_TEE; not in the 5.0 spec"),
 ]
 
 # 7.5.3.4 Table 7-20, Device Control Register, offset 08h.
@@ -250,7 +278,7 @@ DEVICE_CONTROL = [
     (10, 10, "Aux Power PM Enable", None, "RWS, sticky"),
     (11, 11, "Enable No Snoop", None),
     (14, 12, "Max_Read_Request_Size", payload_text),
-    (15, 15, "Initiate Function Level Reset / Bridge Configuration Retry Enable", None, "reads 0; meaning depends on Function type"),
+    (15, 15, "Initiate FLR / Bridge Config Retry Enable", None, "Endpoints with FLR: Initiate FLR (write 1, reads 0); PCIe-to-PCI/PCI-X Bridges: Bridge Configuration Retry Enable (RW); others RsvdP"),
 ]
 
 # 7.5.3.5 Table 7-21, Device Status Register, offset 0Ah.
@@ -272,7 +300,7 @@ LINK_CAPABILITIES = [
     (11, 10, "ASPM Support", ASPM_SUPPORT),
     (14, 12, "L0s Exit Latency", L0S_EXIT, "undefined when L0s is unsupported"),
     (17, 15, "L1 Exit Latency", L1_EXIT, "undefined when ASPM L1 is unsupported"),
-    (18, 18, "Clock Power Management", None, "Upstream Ports: tolerates CLKREQ# clock removal in L1"),
+    (18, 18, "Clock Power Management", None, "Upstream Ports: tolerates CLKREQ# clock removal in L1 and L2/L3 Ready"),
     (19, 19, "Surprise Down Error Reporting Capable", None, "Downstream Ports only"),
     (20, 20, "Data Link Layer Link Active Reporting Capable", None, "Downstream Ports only"),
     (21, 21, "Link Bandwidth Notification Capability", None, "Root Ports and Switch Downstream Ports"),
@@ -429,7 +457,7 @@ DEVICE_STATUS_2 = [(15, 0, "RsvdZ (placeholder register)", reserved_text)]
 # 7.5.3.18 Table 7-33, Link Capabilities 2, offset 2Ch.
 LINK_CAPABILITIES_2 = [
     (0, 0, "RsvdP", reserved_text),
-    (7, 1, "Supported Link Speeds Vector", speeds_vector_text, "bit 0 = 2.5 GT/s ... bit 4 = 32.0 GT/s"),
+    (7, 1, "Supported Link Speeds Vector", speeds_vector_text, "bit 0 = 2.5 GT/s ... bit 4 = 32 GT/s"),
     (8, 8, "Crosslink Supported", None),
     (15, 9, "Lower SKP OS Generation Supported Speeds Vector", speeds_vector_text),
     (22, 16, "Lower SKP OS Reception Supported Speeds Vector", speeds_vector_text),
@@ -438,6 +466,15 @@ LINK_CAPABILITIES_2 = [
     (30, 25, "RsvdP", reserved_text),
     (31, 31, "DRS Supported", None),
 ]
+
+def compliance_preset_text(v: int) -> str:
+    """Link Control 2 bits 15:12 (7.5.3.19): de-emphasis at 5.0 GT/s, a Transmitter preset at 8.0 GT/s and up."""
+    if v == 0:
+        return "-6 dB at 5.0 GT/s / preset P0 at 8.0 GT/s and up (Table 4-3: 0 dB preshoot, -6 dB de-emphasis)"
+    if v == 1:
+        return "-3.5 dB at 5.0 GT/s / preset P1 at 8.0 GT/s and up"
+    return f"preset P{v} at 8.0 GT/s and up (Section 4.2.3.2)"
+
 
 # 7.5.3.19 Table 7-34, Link Control 2, offset 30h.
 LINK_CONTROL_2 = [
@@ -448,7 +485,7 @@ LINK_CONTROL_2 = [
     (9, 7, "Transmit Margin", lambda v: "normal operating range" if v == 0 else f"{v} (Section 8.3.4)"),
     (10, 10, "Enter Modified Compliance", None),
     (11, 11, "Compliance SOS", None),
-    (15, 12, "Compliance Preset/De-emphasis", lambda v: f"{v}" + (" (-6 dB at 5.0 GT/s; preset P0 at 8.0 GT/s and up)" if v == 0 else "")),
+    (15, 12, "Compliance Preset/De-emphasis", compliance_preset_text, "Table 4-3 in 4.2.3.2 names the presets"),
 ]
 
 # 7.5.3.20 Table 7-35, Link Status 2, offset 32h.
@@ -462,7 +499,7 @@ LINK_STATUS_2 = [
     (6, 6, "Retimer Presence Detected", None),
     (7, 7, "Two Retimers Presence Detected", None),
     (9, 8, "Crosslink Resolution", CROSSLINK_RESOLUTION),
-    (11, 10, "RsvdZ (bit 10 is Flit Mode Status in PCIe 6.0)", reserved_text),
+    (11, 10, "RsvdZ (bit 10 is Flit Mode Status in PCIe 6.0)", reserved_text, "pci_regs.h PCI_EXP_LNKSTA2_FLIT; not in the 5.0 spec"),
     (14, 12, "Downstream Component Presence", DOWNSTREAM_PRESENCE, "Downstream Ports with DRS only"),
     (15, 15, "DRS Message Received", None, "RW1C"),
 ]
@@ -499,20 +536,57 @@ REGISTER_TABLE = [
 ]
 
 PORT_TYPES_WITHOUT_LINK = {9, 10}  # RCiEP and Root Complex Event Collector (7.5.3, page 718)
+ENDPOINT_TYPES = {0, 1}  # PCI Express Endpoint, Legacy PCI Express Endpoint
+# lspci's convention (ls-caps.c link_compare): a Root Port, Switch Downstream Port or
+# PCIe-to-PCI/PCI-X Bridge is the Downstream side of its Link, and the far end sets what
+# the Link trains to, so a slower Link is not that port's own "downgrade" and lspci says
+# nothing. Endpoints and Upstream Ports get the word. A choice to follow lspci here.
+DOWNSTREAM_SIDE_TYPES = {4, 6, 7}
 
 
 def pcie_structure_length(pcie_capabilities_value: int) -> int:
     """Bytes in the structure, from the Capability Version and Device/Port Type at +02h.
 
-    A choice following Linux pci_regs.h: version 2 and up run to +3Bh (60);
-    version 1 ends after Link Status (+13h, 20) or, with no Link registers
-    (RCiEP, Event Collector), after Device Status (+0Bh, 12).
+    A choice of this tool (see the module docstring): version 2 and up read the
+    whole Figure 7-21, +00h to +3Bh (60 bytes). Version 1: Endpoints end after
+    Link Status (+13h, 20 bytes) and RCiEPs after Device Status (+0Bh, 12),
+    the two sizes Linux pci_regs.h keeps for version 1; Ports and Event
+    Collectors run through Root Status (+23h, 36 bytes).
     """
     version = bits(pcie_capabilities_value, 3, 0)
     port_type = bits(pcie_capabilities_value, 7, 4)
     if version >= 2:
         return 0x3C
-    return 0x0C if port_type in PORT_TYPES_WITHOUT_LINK else 0x14
+    if port_type == 9:  # RCiEP: no Link, no Slot, no Root registers
+        return 0x0C
+    if port_type in ENDPOINT_TYPES:
+        return 0x14
+    return 0x24
+
+
+def link_tag(current: int, maximum: int, port_type: int) -> str:
+    """lspci's word after a Link Status speed or width, or '' (ls-caps.c link_compare).
+
+    'downgraded' when the status is below the capability and this Function is
+    not the Downstream side of the Link (see DOWNSTREAM_SIDE_TYPES);
+    'overdriven' when the status is above the capability, which no sane dump
+    shows. Comparing the codes compares the speeds: they index one vector.
+    """
+    if current > maximum:
+        return "overdriven"
+    if 0 < current < maximum and port_type not in DOWNSTREAM_SIDE_TYPES:
+        return "downgraded"
+    return ""
+
+
+def slot_power_limit_watts(value: int, scale: int) -> float | None:
+    """7.5.3.3 / 7.5.3.9: Watts = value x scale, except the alternate codes F0h-F2h at scale 0.
+
+    F0h = 250 W, F1h = 275 W, F2h = 300 W; F3h-FFh at scale 0 are reserved (None).
+    """
+    if scale == 0 and value >= 0xF0:
+        return {0xF0: 250.0, 0xF1: 275.0, 0xF2: 300.0}.get(value)
+    return value * {0: 1.0, 1: 0.1, 2: 0.01, 3: 0.001}[scale]
 
 
 @dataclass
@@ -524,7 +598,17 @@ class PcieCapability:
         for r in self.registers:
             if r.key == key:
                 return r
-        raise KeyError(key)
+        raise KeyError(key)  # the same error a dict gives for a missing key: a misspelled name fails loudly
+
+    def has_register(self, key: str) -> bool:
+        """True when the register is inside structure_length (version-1 structures stop early)."""
+        return any(r.key == key for r in self.registers)
+
+    def value_or_none(self, key: str, name: str) -> int | None:
+        """register(key).value(name), or None when the structure ends before that register."""
+        # register(key) finds one Register in the list; .value(name) then looks up one of its
+        # fields. The dot chains the two lookups.
+        return self.register(key).value(name) if self.has_register(key) else None
 
     @property
     def version(self) -> int:
@@ -544,42 +628,66 @@ class PcieCapability:
 
     @property
     def has_link_registers(self) -> bool:
-        return self.device_port_type not in PORT_TYPES_WITHOUT_LINK
+        """The Function implements a Link (page 718) and the structure reaches Link Status."""
+        return self.device_port_type not in PORT_TYPES_WITHOUT_LINK and self.has_register("link_status")
+
+    # The four Link numbers are None when the structure ends before their register
+    # (a version-1 RCiEP has no Link Status), so --json prints null instead of crashing.
+    @property
+    def max_link_speed_code(self) -> int | None:
+        return self.value_or_none("link_capabilities", "Max Link Speed")
 
     @property
-    def max_link_speed_code(self) -> int:
-        return self.register("link_capabilities").value("Max Link Speed")
+    def current_link_speed_code(self) -> int | None:
+        return self.value_or_none("link_status", "Current Link Speed")
 
     @property
-    def current_link_speed_code(self) -> int:
-        return self.register("link_status").value("Current Link Speed")
+    def max_link_width(self) -> int | None:
+        return self.value_or_none("link_capabilities", "Maximum Link Width")
 
     @property
-    def max_link_width(self) -> int:
-        return self.register("link_capabilities").value("Maximum Link Width")
+    def negotiated_link_width(self) -> int | None:
+        return self.value_or_none("link_status", "Negotiated Link Width")
 
     @property
-    def negotiated_link_width(self) -> int:
-        return self.register("link_status").value("Negotiated Link Width")
+    def speed_tag(self) -> str:
+        """'downgraded', 'overdriven' or '' for the speed, by lspci's rule (link_tag)."""
+        if not self.has_link_registers:
+            return ""
+        return link_tag(self.current_link_speed_code, self.max_link_speed_code, self.device_port_type)
+
+    @property
+    def width_tag(self) -> str:
+        if not self.has_link_registers:
+            return ""
+        return link_tag(self.negotiated_link_width, self.max_link_width, self.device_port_type)
 
     @property
     def speed_downgraded(self) -> bool:
-        """Current Link Speed below Max Link Speed: what lspci marks '(downgraded)'.
-
-        The codes index the same vector, so comparing them compares speeds.
-        """
-        return 0 < self.current_link_speed_code < self.max_link_speed_code
+        """Current Link Speed below Max Link Speed, on a Function lspci would mark '(downgraded)'."""
+        return self.speed_tag == "downgraded"
 
     @property
     def width_downgraded(self) -> bool:
-        return 0 < self.negotiated_link_width < self.max_link_width
+        return self.width_tag == "downgraded"
 
     @property
-    def link_summary(self) -> str:
-        """lspci's LnkSta line in one string: 'Speed 2.5 GT/s (downgraded), Width x16'."""
-        speed = speed_text(self.current_link_speed_code) + (" (downgraded)" if self.speed_downgraded else "")
-        width = width_text(self.negotiated_link_width) + (" (downgraded)" if self.width_downgraded else "")
+    def link_summary(self) -> str | None:
+        """lspci's LnkSta line in one string: 'Speed 2.5 GT/s (downgraded), Width x16'.
+
+        None when the Function has no Link registers to summarize.
+        """
+        if not self.has_link_registers:
+            return None
+        speed = speed_text(self.current_link_speed_code) + (f" ({self.speed_tag})" if self.speed_tag else "")
+        width = width_text(self.negotiated_link_width) + (f" ({self.width_tag})" if self.width_tag else "")
         return f"Speed {speed}, Width {width}"
+
+    @property
+    def slot_power_limit_watts(self) -> float | None:
+        """Device Capabilities bits 27:18 as Watts (7.5.3.3); the number lspci prints as SlotPowerLimit."""
+        caps = self.register("device_capabilities")
+        return slot_power_limit_watts(caps.value("Captured Slot Power Limit Value"), caps.value("Captured Slot Power Limit Scale"))
 
     @property
     def max_payload_supported_bytes(self) -> int | None:
@@ -594,24 +702,63 @@ class PcieCapability:
         return PAYLOAD_BYTES.get(self.register("device_control").value("Max_Read_Request_Size"))
 
     @property
-    def supported_speeds_gts(self) -> list[float]:
-        vector = self.register("link_capabilities_2").value("Supported Link Speeds Vector")
+    def supported_speeds_gts(self) -> list[float] | None:
+        """Link Capabilities 2 bits 7:1 as a list of GT/s; None on a version-1 structure, which has no such register."""
+        vector = self.value_or_none("link_capabilities_2", "Supported Link Speeds Vector")
+        if vector is None:
+            return None
         return [s for n, s in enumerate(SUPPORTED_SPEEDS_VECTOR) if bit(vector, n)]
 
 
-def decode_pcie_capability(cs: ConfigSpace, offset: int) -> PcieCapability:
+def decode_pcie_capability(cs: ConfigSpace, offset: int, limit: int | None = None) -> PcieCapability:
     """Spec 7.5.3: every register of the PCI Express Capability at absolute `offset`.
 
     Registers are read at offset + their relative offset with u16 or u32 by
     width; only the registers inside the structure (by version and type) are
-    read, so a version-1 structure never reads past its own end.
+    read, so a version-1 structure never reads past its own end. `limit`
+    (bytes) cuts the structure shorter still, for a dump whose next
+    capability starts inside this one: the registers that fit are decoded.
     """
     caps_value = cs.u16(offset + 0x02)
     length = pcie_structure_length(caps_value)
+    if limit is not None:
+        length = min(length, limit)
     registers = []
+    # each row of REGISTER_TABLE is a 6-tuple; the six names take its items in order (as in caps.py)
     for key, name, section, rel, width, layout in REGISTER_TABLE:
+        # width // 8: bits -> bytes. rel + bytes is the first byte past this register; if that
+        # is beyond the structure, stop the whole loop (break), because the table is in address
+        # order and everything after it lies further out.
         if rel + width // 8 > length:
             break
         raw = cs.u16(offset + rel) if width == 16 else cs.u32(offset + rel)
         registers.append(make_register(key, name, section, rel, width, raw, layout))
     return PcieCapability(offset=offset, registers=registers)
+
+
+# Rule 2, for the three registers Aidan decoded by hand: one named function each, so the
+# interview answer is a function name. Each is REGISTER_TABLE's row applied to one register.
+def _decode_one(cs: ConfigSpace, offset: int, key: str) -> Register:
+    for k, name, section, rel, width, layout in REGISTER_TABLE:
+        if k == key:
+            raw = cs.u16(offset + rel) if width == 16 else cs.u32(offset + rel)
+            return make_register(key, name, section, rel, width, raw, layout)
+    raise KeyError(key)
+
+
+def decode_link_capabilities(cs: ConfigSpace, offset: int) -> Register:
+    """Spec 7.5.3.6, Link Capabilities Register, PCIe capability offset 0Ch (32 bits)."""
+    return _decode_one(cs, offset, "link_capabilities")
+
+
+def decode_link_control(cs: ConfigSpace, offset: int) -> Register:
+    """Spec 7.5.3.7, Link Control Register, PCIe capability offset 10h (16 bits)."""
+    return _decode_one(cs, offset, "link_control")
+
+
+def decode_link_status(cs: ConfigSpace, offset: int) -> Register:
+    """Spec 7.5.3.8, Link Status Register, PCIe capability offset 12h (16 bits).
+
+    The GPU's 0x1101: bits 3:0 = 1 (2.5 GT/s), bits 9:4 = 16 (x16), bit 12 Slot Clock Configuration.
+    """
+    return _decode_one(cs, offset, "link_status")

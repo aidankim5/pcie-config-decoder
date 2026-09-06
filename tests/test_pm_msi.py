@@ -161,22 +161,22 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert main(["decode", str(SSD)]) == OK
     out = capsys.readouterr().out
     assert "-- 40h Power Management (ID 01, spec 7.5.2, 8 bytes)  [ahead" in out
-    assert "  +02h (42h) PMC                  0013       version 3; PME Clock-; Immediate Readiness on Return to D0+; DSI-; Aux current 0 mA; D1-; D2-; PME from: none" in out
-    assert "  +04h (44h) PMCSR                0008       D0; No Soft Reset+; PME_En-; Data_Select 0, Data_Scale 0: Data register reads 00" in out
+    assert "  +02h (42h) PMC                    0013       version 3; PME Clock-; Immediate Readiness on Return to D0+; DSI-; Aux current 0 mA; D1-; D2-; PME from: none" in out
+    assert "  +04h (44h) PMCSR                  0008       D0; No Soft Reset+; PME_En-; Data_Select 0, Data_Scale 0: Data register reads 00" in out
     assert "-- 50h MSI (ID 05, spec 7.7.1, 16 bytes by DWORD count: 64-bit address, no per-vector masking)" in out
-    assert "  +02h (52h) Message Control      008a       Enable-; 1 of 32 vectors (codes 0/5, 2^code); 64-bit Address+; Per-Vector Masking-" in out
+    assert "  +02h (52h) Message Control        008a       Enable-; 1 of 32 vectors (codes 0/5, 2^code); 64-bit Address+; Per-Vector Masking-" in out
     assert "-- B0h MSI-X (ID 11, spec 7.7.2, 12 bytes)  [ahead" in out
-    assert "  +02h (B2h) Message Control      8010       Enable+; Function Mask-; Table Size code 16 = 17 entries" in out
-    assert "  +04h (B4h) Table Offset/BIR     00003000   BIR 0 = BAR at 10h, offset 3000h" in out
-    assert "  +08h (B8h) PBA Offset/BIR       00002000   BIR 0 = BAR at 10h, offset 2000h" in out
+    assert "  +02h (B2h) Message Control        8010       Enable+; Function Mask-; Table Size code 16 = 17 entries" in out
+    assert "  +04h (B4h) Table Offset/BIR       00003000   BIR 0 = BAR at 10h, offset 3000h" in out
+    assert "  +08h (B8h) PBA Offset/BIR         00002000   BIR 0 = BAR at 10h, offset 2000h" in out
 
     assert main(["decode", str(GPU)]) == OK
     out = capsys.readouterr().out
-    assert "  +02h (6Ah) Message Control      0081       Enable+; 1 of 1 vectors (codes 0/0, 2^code); 64-bit Address+" in out
-    assert "  +04h (6Ch) Message Address      fee00d58" in out
-    assert "  +08h (70h) Message Upper Addr   00000000   bits 63:32 -> full address 00000000fee00d58" in out
-    assert "  +0Ch (74h) Message Data         0000       low 16 bits of the DWORD; high 16 bits 0000: not Extended Message Data Capable" in out
-    assert "  +02h (62h) PMC                  4803       version 3; PME Clock-; Immediate Readiness on Return to D0-; DSI-; Aux current 0 mA; D1-; D2-; PME from: D0, D3hot" in out
+    assert "  +02h (6Ah) Message Control        0081       Enable+; 1 of 1 vectors (codes 0/0, 2^code); 64-bit Address+" in out
+    assert "  +04h (6Ch) Message Address        fee00d58" in out
+    assert "  +08h (70h) Message Upper Addr     00000000   bits 63:32 -> full address 00000000fee00d58" in out
+    assert "  +0Ch (74h) Message Data           0000       low 16 bits of the DWORD; high 16 bits 0000: not Extended Message Data Capable" in out
+    assert "  +02h (62h) PMC                    4803       version 3; PME Clock-; Immediate Readiness on Return to D0-; DSI-; Aux current 0 mA; D1-; D2-; PME from: D0, D3hot" in out
 
     assert main(["decode", str(SSD), "--json"]) == OK
     doc = json.loads(capsys.readouterr().out)

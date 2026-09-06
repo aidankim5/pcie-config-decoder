@@ -194,7 +194,7 @@ def test_render_annotated_marks_starts_and_rebases():
     assert lines[row60 + 1] == "    ^^ 60h: Power Management (ID 01, next 68h) [ahead: decoded by the tool, not yet worked through by hand]"
     # column of byte 8 in the row: 4 characters for "60: " plus 3 per byte x 8 = 28
     assert lines[row60 + 2] == " " * (4 + 3 * 8) + "^^ 68h: MSI (ID 05, next 78h)"
-    header = "== 78h PCI Express: structure 60 bytes (by Capability Version and port type; a choice following pci_regs.h); 60 bytes to the next start at B4h; printed from 00 (relative offsets; add 78h for the absolute offset) =="
+    header = "== 78h PCI Express: structure 60 bytes (by Capability Version and port type; a choice of this tool, see pcie_cap.py); 60 bytes to the next start at B4h; printed from 00 (relative offsets; add 78h for the absolute offset) =="
     i = lines.index(header)
     assert lines[i + 1] == "00: 10 b4 12 00 e1 8d 2c 11 3f 29 00 00 04 3d 45 00 | absolute 78h"
     assert lines[i + 2].startswith("10: 40 01 01 11") and lines[i + 2].endswith("| absolute 88h")

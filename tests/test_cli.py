@@ -26,7 +26,7 @@ def test_decode_prints_every_section_and_exits_0(capsys):
         "Extended capability chain (spec 7.6.1, 7.6.3; starts at 100h, one DWORD header each)  [taught]",
         "-- 420h AER (Advanced Error Reporting) (ID 0001 v2, header 60020001, 44 bytes)",
         "  summary: uncorrectable errors logged: none; correctable errors logged: Advisory Non-Fatal Error; first error pointer bit 0",
-        "  +1Ch (43Ch) Header Log                      00000000 00000000 00000000 00000000",
+        "  +1Ch (43Ch) Header Log                                         00000000 00000000 00000000 00000000",
     ):
         assert marker in out, marker
     assert "not built yet" not in out

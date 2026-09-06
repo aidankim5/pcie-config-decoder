@@ -1,7 +1,10 @@
 """Text output: the hex view (module 1), the header view (module 2), the
-standard capability chain and the --annotate teaching view (module 3), and
-the register blocks for Power Management, MSI and MSI-X (module 4), one line
-per register with the relative offset first and the absolute offset after it.
+standard capability chain and the --annotate teaching view (module 3), the
+register blocks for Power Management, MSI and MSI-X (module 4), one line per
+register with the relative offset first and the absolute offset after it,
+every register of the PCI Express capability with lspci's LnkSta summary
+first (module 5), the extended chain and the decoded extended capabilities
+(module 6), and AER (module 7).
 
 The header view lists one line per register: absolute offset, name, raw value
 as it sits in the dump (little-endian already flipped), then the decoded
@@ -232,7 +235,7 @@ def structure_text(c: Capability) -> str:
     if c.cap_id == 0x05:
         return f"structure {length} bytes (DWORDs of Figures 7-44 to 7-47 per Message Control; a count, the spec gives no byte size)"
     if c.cap_id == 0x10:
-        return f"structure {length} bytes (by Capability Version and port type; a choice following pci_regs.h)"
+        return f"structure {length} bytes (by Capability Version and port type; a choice of this tool, see pcie_cap.py)"
     return f"structure {length} bytes (spec)"
 
 
@@ -308,17 +311,30 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
 # --- module 5: the PCI Express capability ----------------------------------------------
 
 def is_reserved_field(name: str) -> bool:
+    """Fields the spec marks reserved or undefined; render_register_lines hides them when 0.
+
+    The double parentheses hand startswith a tuple: true if the name starts with any one of them.
+    """
     return name.startswith(("RsvdP", "RsvdZ", "Reserved", "Undefined"))
 
 
-def render_register_lines(base: int, r: Register, collapse_note: str = "") -> list[str]:
+def name_pad(registers, floor: int = 18) -> int:
+    """Width of the register-name column: the longest name in this block, never below `floor`.
+
+    Per block, not one number for the whole tool: the AER names run to 28 characters and the
+    Power Management ones to 18, so a single width would leave one block far too wide.
+    """
+    return max([floor] + [len(r.name) for r in registers])
+
+
+def render_register_lines(base: int, r: Register, collapse_note: str = "", pad: int = 22) -> list[str]:
     """The register's own line (relative and absolute offset, raw), then one line per field.
 
     Reserved and undefined fields print only when they are not zero. With a
     collapse_note and a raw value of zero the register is one line only.
     """
-    digits = r.width // 4  # 4 bits per hex digit
-    head = _rline(base, r.offset, r.name, f"{r.raw:0{digits}x}", f"spec {r.section}")
+    digits = r.width // 4  # 4 bits per hex digit; the inner {digits} in the f-string is filled first, giving :04x or :08x
+    head = _rline(base, r.offset, r.name, f"{r.raw:0{digits}x}", f"spec {r.section}", pad)
     if collapse_note and r.raw == 0:
         return [head + f"; {collapse_note}"]
     lines = [head]
@@ -331,22 +347,36 @@ def render_register_lines(base: int, r: Register, collapse_note: str = "") -> li
     return lines
 
 
-def render_register(p: PcieCapability, r: Register) -> list[str]:
-    """A PCIe capability register; Slot/Root registers that read zero on a Function without
-    a slot, and the placeholder Device Status 2, collapse to one line."""
-    if r.key.startswith(("slot_", "root_")):
-        return render_register_lines(p.offset, r, "ports with slots / Root Ports only; reads zero on this Function")
-    if r.key == "device_status_2":
-        return render_register_lines(p.offset, r, "placeholder register, RsvdZ")
-    return render_register_lines(p.offset, r)
+def render_register(p: PcieCapability, r: Register, pad: int = 22) -> list[str]:
+    """A PCIe capability register, one line per field.
+
+    Registers the spec says this Function type does not implement (page 718:
+    hardwired 0b) collapse to one line when they read zero: the Slot registers
+    unless this is a Downstream Port with Slot Implemented set, the Root
+    registers unless this is a Root Port or Event Collector. The placeholder
+    Device Status 2 collapses the same way. Any non-zero register prints in
+    full whatever the type. Omitting the bit names there is a choice; --json
+    lists them.
+    """
+    port_type = p.device_port_type
+    has_slot = port_type in (4, 6) and p.register("pcie_capabilities").is_set("Slot Implemented")
+    is_root = port_type in (4, 10)
+    if r.key.startswith("slot_") and not has_slot:
+        return render_register_lines(p.offset, r, "Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice", pad)
+    if r.key.startswith("root_") and not is_root:
+        return render_register_lines(p.offset, r, "Root Ports and Root Complex Event Collectors only; bit names omitted, a choice", pad)
+    if r.key in ("device_status_2", "slot_control_2", "slot_status_2"):
+        return render_register_lines(p.offset, r, "placeholder register", pad)
+    return render_register_lines(p.offset, r, pad=pad)
 
 
 def render_pcie_capability(p: PcieCapability) -> list[str]:
     lines = []
     if p.has_link_registers:
-        lines.append(f"  Link: {p.link_summary}   (lspci's LnkSta line; 'downgraded' = below Link Capabilities)")
+        lines.append(f"  Link: {p.link_summary}   (lspci's LnkSta line; 'downgraded' = below Link Capabilities, not said for Downstream Ports)")
+    pad = name_pad(p.registers)
     for r in p.registers:
-        lines += render_register(p, r)
+        lines += render_register(p, r, pad)
     return lines
 
 
@@ -392,18 +422,19 @@ def render_aer(aer: Aer) -> list[str]:
     """AER (module 7): a one-line health summary, every register, and the Header Log as
     lspci prints it (four DWORDs, header byte 0 in the top byte of the first, 7.8.4.8)."""
     lines = [f"  summary: {aer.summary}"]
+    pad = name_pad(aer.registers)
     if not aer.severity_is_spec_default:
         lines.append("  note: Uncorrectable Error Severity differs from the spec 5.0 default 00462030h (Table 7-102)")
     for r in aer.registers:
-        lines += render_register_lines(aer.offset, r)
+        lines += render_register_lines(aer.offset, r, pad=pad)
         if r.key == "caps_control":
             log = " ".join(f"{dw:08x}" for dw in aer.header_log)
-            lines.append(_rline(aer.offset, 0x1C, "Header Log", "", f"{log}  (four DWORDs; header byte 0 is the top byte of the first, 7.8.4.8; spec 7.8.4.8)"))
+            lines.append(_rline(aer.offset, 0x1C, "Header Log", "", f"{log}  (four DWORDs; header byte 0 is the top byte of the first, 7.8.4.8; spec 7.8.4.8)", pad))
     if not aer.is_root:
-        lines.append(_rline(aer.offset, 0x2C, "Root Error regs", "", "2Ch-37h: Root Ports and Root Complex Event Collectors only; read zero on this Function"))
+        lines.append(_rline(aer.offset, 0x2C, "Root Error regs", "", "2Ch-37h: Root Ports and Root Complex Event Collectors only; read zero on this Function", pad))
     if aer.tlp_prefix_log is not None:
         log = " ".join(f"{dw:08x}" for dw in aer.tlp_prefix_log)
-        lines.append(_rline(aer.offset, 0x38, "TLP Prefix Log", "", f"{log}  (spec 7.8.4.12)"))
+        lines.append(_rline(aer.offset, 0x38, "TLP Prefix Log", "", f"{log}  (spec 7.8.4.12)", pad))
     return lines
 
 
@@ -430,8 +461,9 @@ def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain, is_root:
             lines.append(f"  summary: {summary}")
         regs = decode_extended_registers(cs, c)
         if regs:
+            registers = regs
             for r in regs:
-                lines += render_register_lines(c.offset, r)
+                lines += render_register_lines(c.offset, r, pad=name_pad(registers))
         else:
             shown = c.structure_data[:64]
             lines.append(f"  header only; first {len(shown)} bytes of the structure, printed from 00 (add {c.offset:03X}h for the absolute offset):")
@@ -470,9 +502,11 @@ def plus_minus(flag: bool) -> str:
     return "+" if flag else "-"
 
 
-def _rline(cap_offset: int, rel: int, name: str, raw: str, meaning: str = "") -> str:
+def _rline(cap_offset: int, rel: int, name: str, raw: str, meaning: str = "", pad: int = 22) -> str:
     """One capability register: relative offset first, absolute in parentheses, then raw and meaning."""
-    return f"  +{rel:02X}h ({cap_offset + rel:02X}h) {name:<20} {raw:<10} {meaning}".rstrip()
+    # The nested {pad} is filled first, so :<22 pads the name to that many characters (the widest
+    # name in this block, see name_pad); :<10 pads the raw value.
+    return f"  +{rel:02X}h ({cap_offset + rel:02X}h) {name:<{pad}} {raw:<10} {meaning}".rstrip()
 
 
 def cap_heading(c: Capability, detail: str) -> str:
@@ -600,11 +634,16 @@ def render_capabilities(cs: ConfigSpace, chain: CapabilityChain) -> str:
             lines.append(cap_heading(c, "spec 7.7.2, 12 bytes"))
             lines += render_msix(decode_msix(cs, c.offset))
         elif c.cap_id == 0x10:
-            if length is None or does_not_fit:
-                lines.append(cap_heading(c, "spec 7.5.3") + f"\n  [problem: {c.problem or 'PCI Express Capabilities register at +02h cannot be read'}]")
+            if length is None:
+                lines.append(cap_heading(c, "spec 7.5.3") + "\n  [problem: PCI Express Capabilities register at +02h cannot be read]")
                 continue
-            p = decode_pcie_capability(cs, c.offset)
+            # A structure the next capability cuts into still has readable registers up to
+            # the cut (Linux ends a version-2 Endpoint at +34h, so a dump laid out that way is
+            # not wrong): decode what fits and say what was left out.
+            p = decode_pcie_capability(cs, c.offset, limit=c.span if does_not_fit else None)
             lines.append(cap_heading(c, f"spec 7.5.3, {p.structure_length} bytes: version {p.version}, {p.device_port_type_name}"))
+            if does_not_fit:
+                lines.append(f"  [problem: {c.problem}; only the {len(p.registers)} registers inside the {c.span}-byte span are decoded]")
             lines += render_pcie_capability(p)
         elif c.cap_id == 0x09:
             lines.append(cap_heading(c, "spec 7.9.4, vendor-defined bytes after the 3-byte header"))

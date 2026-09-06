@@ -103,19 +103,26 @@ def decoded_capability(cs: ConfigSpace, c: Capability) -> dict | None:
         return None
     if c.structure_length is None:  # fewer than 4 bytes: the register at +02h is unreadable
         return {"problem": f"only {c.span} bytes; the register at +02h cannot be read"}
-    if c.span < c.structure_length:
+    if c.span < c.structure_length and c.cap_id != 0x10:
         return {"problem": c.problem}
     if c.cap_id == 0x10:
-        p = decode_pcie_capability(cs, c.offset)
+        # PcieCapability stores only offset and registers, so its dict is written by hand: the
+        # lspci-line values first (None where a version-1 structure has no such register), then
+        # every Register (and its Field list) through asdict. A structure the next capability
+        # cuts into is decoded up to the cut, with the problem kept (see render_capabilities).
+        p = decode_pcie_capability(cs, c.offset, limit=c.span if c.span < c.structure_length else None)
         return {
             "offset": p.offset,
             "version": p.version,
             "device_port_type": p.device_port_type,
             "device_port_type_name": p.device_port_type_name,
             "structure_length": p.structure_length,
-            "link_summary": p.link_summary if p.has_link_registers else None,
+            "problem": c.problem if c.span < c.structure_length else None,
+            "link_summary": p.link_summary,
             "speed_downgraded": p.speed_downgraded,
             "width_downgraded": p.width_downgraded,
+            "speed_tag": p.speed_tag,
+            "width_tag": p.width_tag,
             "current_link_speed_code": p.current_link_speed_code,
             "max_link_speed_code": p.max_link_speed_code,
             "negotiated_link_width": p.negotiated_link_width,
@@ -123,6 +130,7 @@ def decoded_capability(cs: ConfigSpace, c: Capability) -> dict | None:
             "max_payload_supported_bytes": p.max_payload_supported_bytes,
             "max_payload_bytes": p.max_payload_bytes,
             "max_read_request_bytes": p.max_read_request_bytes,
+            "slot_power_limit_watts": p.slot_power_limit_watts,
             "supported_speeds_gts": p.supported_speeds_gts,
             "registers": [asdict(r) for r in p.registers],
         }
