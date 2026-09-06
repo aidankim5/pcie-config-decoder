@@ -1,8 +1,9 @@
 """Command line: decode, all, list, dump.
 
-Built so far: `decode` prints the header (module 2) and, with --hex, the raw
-bytes (module 1). Everything else says plainly that it is not built yet
-instead of printing something that looks decoded.
+Built so far: `decode` prints the header (module 2), the standard capability
+chain and the --annotate view (module 3), and with --hex the raw bytes
+(module 1). Everything else says plainly that it is not built yet instead of
+printing something that looks decoded.
 
 Exit codes (a choice, not spec):
   0  done
@@ -16,9 +17,10 @@ import json
 import sys
 from dataclasses import asdict
 
+from .caps import walk_standard_caps
 from .header import decode_header
 from .parse import ConfigSpace, ParseError, load_config_space
-from .render import render_header, render_hex
+from .render import render_annotated, render_chain, render_header, render_hex
 
 OK, BAD_INPUT, NOT_YET = 0, 1, 3  # 2 is taken by argparse
 
@@ -70,9 +72,33 @@ def describe_source(cs: ConfigSpace) -> list[str]:
     return lines
 
 
+def chain_as_json(chain) -> dict:
+    """The chain as plain dicts; the bytes become a hex string, which JSON can carry."""
+    return {
+        "pointer_raw": chain.pointer_raw,
+        "pointer": chain.pointer,
+        "has_list": chain.has_list,
+        "notes": chain.notes,
+        "entries": [
+            {
+                "offset": c.offset,
+                "id": c.cap_id,
+                "name": c.name,
+                "next_pointer": c.next_pointer,
+                "span": c.span,
+                "taught": c.taught,
+                "problem": c.problem,
+                "data": c.data.hex(),
+            }
+            for c in chain.entries
+        ],
+    }
+
+
 def cmd_decode(args: argparse.Namespace) -> int:
     cs = load_config_space(args.file)
     header = decode_header(cs)
+    chain = walk_standard_caps(cs) if header.function_present else None
 
     if args.json:
         # asdict turns the dataclass (and its nested Bit/Bar lists) into plain dicts and lists,
@@ -80,20 +106,25 @@ def cmd_decode(args: argparse.Namespace) -> int:
         # (a choice; hex strings would be the alternative). Properties are not fields, so the
         # derived names are added by the render module later.
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
+        if chain is not None:
+            doc["standard_capabilities"] = chain_as_json(chain)
         print(json.dumps(doc, indent=2))
-        print("json: capability chains not built yet (modules caps, pcie_cap, extcaps, aer)", file=sys.stderr)
+        print("json: per-capability decodes not built yet (modules pm, msi, pcie_cap, extcaps, aer)", file=sys.stderr)
         return NOT_YET
 
     print("\n".join(describe_source(cs)))
     print(render_header(header))
+    if chain is not None:
+        print()
+        print(render_chain(chain))
+        if args.annotate:
+            print()
+            print(render_annotated(cs, chain))
     if args.hex:  # like lspci -xxxx: the decoded view first, then the raw bytes
         print()
         print(render_hex(cs.data))
     # Messages about what is missing go to stderr, so stdout stays clean data.
-    if args.annotate:
-        print("decode --annotate: not built yet (module: render)", file=sys.stderr)
-        return NOT_YET
-    print("capability chains: not built yet (modules caps, pcie_cap, extcaps, aer)", file=sys.stderr)
+    print("per-capability decodes and the extended chain: not built yet (modules pm, msi, pcie_cap, extcaps, aer)", file=sys.stderr)
     return NOT_YET
 
 
