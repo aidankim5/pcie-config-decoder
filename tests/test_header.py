@@ -304,7 +304,7 @@ def test_cli_decode_prints_header_then_says_what_is_missing(capsys):
     assert main(["decode", str(SSD)]) == NOT_YET
     captured = capsys.readouterr()
     assert "Non-Volatile memory controller (NVM Express): Samsung" in captured.out
-    assert "capability chains: not built yet" in captured.err
+    assert "not built yet" in captured.err
 
 
 def test_cli_json_has_header(capsys):

@@ -69,8 +69,8 @@ def test_taught_tags_follow_claude_md_rule_5():
 
 # --- guards on corrupted chains -----------------------------------------------------
 
-def corrupted(path, **patches):
-    """The fixture's bytes with some offsets overwritten: {offset: value}."""
+def corrupted(path, patches):
+    """The fixture's bytes with some offsets overwritten; patches is {offset: value}."""
     data = bytearray(load_config_space(path).data)
     for off, value in patches.items():
         data[off] = value
@@ -78,44 +78,44 @@ def corrupted(path, **patches):
 
 
 def test_self_loop_stops():
-    chain = walk_standard_caps(corrupted(GPU, **{0x69: 0x68}))  # MSI points at itself
+    chain = walk_standard_caps(corrupted(GPU, {0x69: 0x68}))  # MSI points at itself
     assert summary(chain) == [(0x60, 0x01, 0x68), (0x68, 0x05, 0x68)]
     assert any("loops" in n for n in chain.notes)
 
 
 def test_longer_loop_stops():
-    chain = walk_standard_caps(corrupted(GPU, **{0xB5: 0x60}))  # Vendor Specific points back to PM
+    chain = walk_standard_caps(corrupted(GPU, {0xB5: 0x60}))  # Vendor Specific points back to PM
     assert len(chain.entries) == 4
     assert any("60h was already visited" in n for n in chain.notes)
 
 
 def test_pointer_into_header_stops():
-    chain = walk_standard_caps(corrupted(GPU, **{0x69: 0x30}))
+    chain = walk_standard_caps(corrupted(GPU, {0x69: 0x30}))
     assert [c.offset for c in chain.entries] == [0x60, 0x68]
     assert any("points into the header" in n for n in chain.notes)
 
 
 def test_unaligned_pointer_stops():
-    chain = walk_standard_caps(corrupted(GPU, **{0x69: 0x7A}))
+    chain = walk_standard_caps(corrupted(GPU, {0x69: 0x7A}))
     assert [c.offset for c in chain.entries] == [0x60, 0x68]
     assert any("not DWORD aligned" in n for n in chain.notes)
 
 
 def test_capabilities_pointer_low_bits_are_masked():
-    chain = walk_standard_caps(corrupted(GPU, **{0x34: 0x63}))
+    chain = walk_standard_caps(corrupted(GPU, {0x34: 0x63}))
     assert chain.pointer_raw == 0x63 and chain.pointer == 0x60
     assert [c.offset for c in chain.entries][:1] == [0x60]
     assert any("masked to 60h" in n for n in chain.notes)
 
 
 def test_status_bit_4_clear_means_no_walk():
-    chain = walk_standard_caps(corrupted(GPU, **{0x06: 0x00}))  # Status low byte: bit 4 cleared
+    chain = walk_standard_caps(corrupted(GPU, {0x06: 0x00}))  # Status low byte: bit 4 cleared
     assert not chain.has_list and chain.entries == []
     assert any("Status bit 4" in n for n in chain.notes)
 
 
 def test_pointer_zero_is_an_empty_list():
-    chain = walk_standard_caps(corrupted(GPU, **{0x34: 0x00}))
+    chain = walk_standard_caps(corrupted(GPU, {0x34: 0x00}))
     assert chain.has_list and chain.entries == [] and chain.notes == []
 
 
@@ -147,9 +147,9 @@ def test_all_48_aligned_slots_walk_without_a_false_loop():
 
 
 def test_bad_ids_are_flagged_not_hidden():
-    chain = walk_standard_caps(corrupted(GPU, **{0x68: 0x00}))  # MSI's ID byte zeroed
+    chain = walk_standard_caps(corrupted(GPU, {0x68: 0x00}))  # MSI's ID byte zeroed
     assert chain.find(0x00).problem.startswith("ID 00h")
-    chain = walk_standard_caps(corrupted(GPU, **{0xB6: 0x60}))  # Vendor Specific length 60h > space to 100h? no: 4Ch
+    chain = walk_standard_caps(corrupted(GPU, {0xB6: 0x60}))  # Vendor Specific length 60h > the 4Ch to 100h
     assert "runs past" in chain.find(0x09).problem
 
 
