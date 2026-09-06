@@ -1,9 +1,10 @@
 """Command line: decode, all, list, dump.
 
 Built so far: `decode` prints the header (module 2), the standard capability
-chain and the --annotate view (module 3), and with --hex the raw bytes
-(module 1). Everything else says plainly that it is not built yet instead of
-printing something that looks decoded.
+chain and the --annotate view (module 3), the Power Management, MSI and MSI-X
+registers (module 4; --json carries them under 'decoded'), and with --hex the
+raw bytes (module 1). Everything else says plainly that it is not built yet
+instead of printing something that looks decoded.
 
 Exit codes (a choice, not spec):
   0  done
@@ -17,7 +18,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from .caps import CapabilityChain, walk_standard_caps
+from .caps import Capability, CapabilityChain, walk_standard_caps
 from .header import decode_header
 from .msi import decode_msi, decode_msix
 from .parse import ConfigSpace, ParseError, load_config_space
@@ -74,17 +75,33 @@ def describe_source(cs: ConfigSpace) -> list[str]:
     return lines
 
 
-def decoded_capability(cs: ConfigSpace, c) -> dict | None:
-    """The registers of one chain entry as a dict, when a decoder exists and the bytes fit."""
-    decoders = {0x01: (8, decode_power_management), 0x11: (12, decode_msix)}
-    if c.cap_id == 0x05:
-        decoders[0x05] = (c.structure_length or 4, decode_msi)
-    if c.cap_id not in decoders:
+def decoded_capability(cs: ConfigSpace, c: Capability) -> dict | None:
+    """The registers of one chain entry as a dict, or None when no decoder exists yet.
+
+    asdict gives the stored fields only, so the derived values an lspci line is
+    built from (table size, vector counts, the 64-bit address, PME states) are
+    added by name afterwards.
+    """
+    if c.cap_id not in (0x01, 0x05, 0x11):
         return None
-    needed, decode = decoders[c.cap_id]
-    if c.span < needed:
-        return {"problem": f"only {c.span} bytes before the next start; the structure needs {needed}"}
-    return asdict(decode(cs, c.offset))
+    if c.structure_length is None:  # MSI with fewer than 4 bytes: Message Control unreadable
+        return {"problem": f"only {c.span} bytes; Message Control at +02h cannot be read"}
+    if c.span < c.structure_length:
+        return {"problem": c.problem}
+    if c.cap_id == 0x01:
+        pm = decode_power_management(cs, c.offset)
+        doc = asdict(pm)
+        doc.update(power_state_name=pm.power_state_name, pme_states=pm.pme_states, aux_current_ma=pm.aux_current_ma)
+    elif c.cap_id == 0x05:
+        m = decode_msi(cs, c.offset)
+        doc = asdict(m)
+        doc.update(vectors_capable=m.vectors_capable, vectors_enabled=m.vectors_enabled,
+                   full_address=m.full_address, structure_length=m.structure_length, problem=m.problem)
+    else:
+        x = decode_msix(cs, c.offset)
+        doc = asdict(x)
+        doc.update(table_size=x.table_size, table_bar_offset=x.table_bar_offset, pba_bar_offset=x.pba_bar_offset)
+    return doc
 
 
 def chain_as_json(cs: ConfigSpace, chain: CapabilityChain | None) -> dict:

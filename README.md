@@ -20,6 +20,12 @@ Done so far:
 2. **header and ids**: the Type 0 header, every register with its absolute
    offset, raw value and meaning; `pcicfg decode <file>` prints it. Type 1
    (bridge) headers: bus numbers only, tagged ahead.
+3. **caps**: the standard capability chain from 34h, with loop and bad-pointer
+   guards; `--annotate` marks each capability's start in the hex rows and
+   prints each one again from 00 with the absolute offset on every row.
+4. **pm and msi**: Power Management, MSI and MSI-X registers, one line each
+   with the relative offset first and the absolute offset after it; `--json`
+   carries them under `decoded`.
 
 Taught vs ahead (expanded in the final README): taught = Type 0 header,
 standard and extended capability chains, PCI Express capability, AER, MSI

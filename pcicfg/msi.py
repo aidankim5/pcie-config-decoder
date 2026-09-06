@@ -14,8 +14,10 @@ depends on two Message Control bits, so the structure has four shapes:
   DWORD): at +08h for 32-bit, +0Ch for 64-bit
   Mask Bits and Pending Bits (one DWORD each), only when Per-Vector Masking
   Capable (bit 8): at +0Ch/+10h for 32-bit, +10h/+14h for 64-bit
-So the structure is 12, 16, 20 or 24 bytes (Linux pci_regs.h agrees:
-PCI_MSI_MASK_64 0x10, PCI_MSI_PENDING_64 0x14).
+The byte counts 12, 16, 20, 24 are a choice: whole DWORDs counted off those
+figures. The spec gives no byte size, and 7.7.1.6 says an unimplemented
+Extended Message Data half is "outside the MSI Capability structure".
+Linux pci_regs.h counts the same way (PCI_MSI_MASK_64 0x10, PCI_MSI_PENDING_64 0x14).
 
 MSI-X layout (7.7.2, Figure 7-56): 12 bytes, always the same:
   +02h Message Control, +04h Table Offset / Table BIR, +08h PBA Offset / PBA BIR.
@@ -36,7 +38,10 @@ BIR_TO_BAR_OFFSET = {0: 0x10, 1: 0x14, 2: 0x18, 3: 0x1C, 4: 0x20, 5: 0x24}
 
 
 def msi_structure_length(message_control: int) -> int:
-    """Bytes in the MSI structure, from Message Control bits 7 (64-bit) and 8 (per-vector masking)."""
+    """Bytes in the MSI structure, from Message Control bits 7 (64-bit) and 8 (per-vector masking).
+
+    Counted as whole DWORDs of Figures 7-44 to 7-47 (a choice; see the module docstring).
+    """
     length = 12  # header, Message Control, Message Address, Message Data DWORD (Figure 7-44)
     if bit(message_control, 7):
         length += 4  # Message Upper Address at +08h (Figures 7-45, 7-47)
@@ -60,22 +65,26 @@ class Msi:
     message_upper_address: int | None  # +08h (7.7.1.4), only when address_64bit
     data_offset: int  # relative offset of the Message Data DWORD: 08h or 0Ch
     message_data: int  # low 16 bits of that DWORD (7.7.1.5)
-    extended_message_data: int  # high 16 bits of that DWORD (7.7.1.6); meaningful only if capable
+    # High 16 bits of that DWORD. Only a register when extended_data_capable (7.7.1.6);
+    # otherwise the bits are undefined (no masking) or RsvdP (with masking).
+    extended_message_data: int
     mask_bits: int | None  # +0Ch or +10h (7.7.1.7), only when per_vector_masking
     pending_bits: int | None  # +10h or +14h (7.7.1.8), only when per_vector_masking
 
     @property
-    def vectors_capable(self) -> int:
-        return VECTOR_COUNTS.get(self.multiple_message_capable, 0)  # 0 = reserved code
+    def vectors_capable(self) -> int | None:
+        """2^code vectors requested; None for the reserved codes 6 and 7 (Table 7-39)."""
+        return VECTOR_COUNTS.get(self.multiple_message_capable)
 
     @property
-    def vectors_enabled(self) -> int:
-        return VECTOR_COUNTS.get(self.multiple_message_enable, 0)
+    def vectors_enabled(self) -> int | None:
+        """2^code vectors allocated; None for the reserved codes 6 and 7."""
+        return VECTOR_COUNTS.get(self.multiple_message_enable)
 
     @property
     def full_address(self) -> int:
         """The 64-bit message address: upper DWORD shifted up 32, or just the low DWORD."""
-        upper = self.message_upper_address or 0
+        upper = self.message_upper_address or 0  # `or 0`: None (32-bit layout, no register) becomes 0
         return (upper << 32) | self.message_address
 
     @property
@@ -89,6 +98,15 @@ class Msi:
     @property
     def pending_offset(self) -> int | None:
         return self.data_offset + 8 if self.per_vector_masking else None
+
+    @property
+    def problem(self) -> str:
+        """Combinations Table 7-39 rules out: reserved codes, or more vectors enabled than requested."""
+        if self.vectors_capable is None or self.vectors_enabled is None:
+            return "reserved Multiple Message code (Table 7-39 defines 000b-101b only)"
+        if self.multiple_message_enable > self.multiple_message_capable:
+            return "Multiple Message Enable exceeds Multiple Message Capable (Table 7-39: allocated <= requested)"
+        return ""
 
 
 def decode_msi_message_control(value: int) -> dict:
@@ -121,7 +139,7 @@ def decode_msi(cs: ConfigSpace, offset: int) -> Msi:
     return Msi(
         offset=offset,
         message_control=control,
-        **fields,
+        **fields,  # ** spreads the dict into keyword arguments (same as pm.py and header.py)
         message_address=cs.u32(offset + 0x04),
         message_upper_address=upper,
         data_offset=data_offset,
@@ -165,7 +183,11 @@ class MsiX:
 
 
 def decode_msix(cs: ConfigSpace, offset: int) -> MsiX:
-    """Spec 7.7.2, the 12-byte MSI-X structure at absolute `offset`."""
+    """Spec 7.7.2, the 12-byte MSI-X structure at absolute `offset`.
+
+    Message Control at +02h (7.7.2.2 Table 7-47), Table Offset/Table BIR at
+    +04h (7.7.2.3 Table 7-48), PBA Offset/PBA BIR at +08h (7.7.2.4 Table 7-49).
+    """
     control = cs.u16(offset + 0x02)
     table = cs.u32(offset + 0x04)
     pba = cs.u32(offset + 0x08)

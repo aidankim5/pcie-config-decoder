@@ -1,5 +1,7 @@
 """Text output: the hex view (module 1), the header view (module 2), the
-standard capability chain and the --annotate teaching view (module 3).
+standard capability chain and the --annotate teaching view (module 3), and
+the register blocks for Power Management, MSI and MSI-X (module 4), one line
+per register with the relative offset first and the absolute offset after it.
 
 The header view lists one line per register: absolute offset, name, raw value
 as it sits in the dump (little-endian already flipped), then the decoded
@@ -188,8 +190,11 @@ def render_header(h: Type0Header | Type1Header) -> str:
 # --- module 3: the standard capability chain -------------------------------------
 
 def ahead_tag(c: Capability) -> str:
-    """'' for a capability Aidan has decoded by hand, else the [ahead] marker (CLAUDE.md rule 5)."""
-    return "" if c.taught else "[ahead: registers not yet decoded by hand]"
+    """'' for a capability Aidan has worked through by hand, else the [ahead] marker (CLAUDE.md rule 5).
+
+    'Ahead' means ahead of what he can explain, not ahead of what the tool decodes.
+    """
+    return "" if c.taught else "[ahead: decoded by the tool, not yet worked through by hand]"
 
 
 def describe_capability(c: Capability) -> str:
@@ -201,21 +206,21 @@ def describe_capability(c: Capability) -> str:
 
 
 def span_text(c: Capability) -> str:
-    """'60 bytes to B4h' or '76 bytes to 100h, the end of the PCI-compatible space'."""
+    """'60 bytes to the next start at B4h' or '76 bytes to 100h, the end of the PCI-compatible space'."""
     if c.end >= PCI_COMPATIBLE_END:
         return f"{c.span} bytes to 100h, the end of the PCI-compatible space"
     return f"{c.span} bytes to the next start at {c.end:02X}h"
 
 
 def structure_text(c: Capability) -> str:
-    """'structure 8 bytes' when the spec fixes or the capability declares its size."""
+    """'structure 8 bytes (spec)' when the spec fixes, or the capability tells, its size."""
     length = c.structure_length
     if length is None:
         return "structure size: set by its own registers"
     if c.cap_id == 0x09:
         return f"structure {length} bytes (declared, Table 7-160)"
     if c.cap_id == 0x05:
-        return f"structure {length} bytes (spec 7.7.1, shape from Message Control)"
+        return f"structure {length} bytes (DWORDs of Figures 7-44 to 7-47 per Message Control; a count, the spec gives no byte size)"
     return f"structure {length} bytes (spec)"
 
 
@@ -255,7 +260,7 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
     if end < PCI_COMPATIBLE_END:
         title += "; the dump stops here"
     elif cs.size > PCI_COMPATIBLE_END:
-        title += "; 100h-FFFh (the extended chain, spec 7.6) is in this dump but not walked yet [ahead: module extcaps]"
+        title += "; 100h-FFFh (the extended chain, spec 7.6) is in this dump but not walked yet (module extcaps not built yet)"
     else:
         title += "; this dump has no extended space"
     lines = [title]
@@ -301,36 +306,62 @@ def _rline(cap_offset: int, rel: int, name: str, raw: str, meaning: str = "") ->
 
 
 def cap_heading(c: Capability, detail: str) -> str:
+    """The block title: '-- 40h Power Management (ID 01, spec 7.5.2, 8 bytes)  [ahead: ...]'."""
     return f"-- {c.offset:02X}h {c.name} (ID {c.cap_id:02x}, {detail})  {ahead_tag(c)}".rstrip()
 
 
+def vector_text(count: int | None, code: int) -> str:
+    """'32' for a valid code, or 'reserved code 6' (Table 7-39 defines 000b-101b only)."""
+    return str(count) if count is not None else f"reserved code {code}"
+
+
+def bir_text(bir: int, bar_offset: int | None) -> str:
+    """'BIR 0 = BAR at 10h', or 'BIR 6 (reserved code)' for the two codes Table 7-48 reserves."""
+    return f"BIR {bir} = BAR at {bar_offset:02X}h" if bar_offset is not None else f"BIR {bir} (reserved code)"
+
+
 def render_power_management(pm: PowerManagement) -> list[str]:
-    pme = ", ".join(pm.pme_states) or "none"
+    pme = ", ".join(pm.pme_states) or "none"  # an empty list joins to "", which counts as false, so `or` gives "none"
+    version = f"version {pm.version}" + ("" if pm.version == 3 else " (spec requires 011b = 3)")
     pmc_meaning = (
-        f"version {pm.version}; PME Clock{plus_minus(pm.pme_clock)}; Immediate Readiness{plus_minus(pm.immediate_readiness)}; "
+        f"{version}; PME Clock{plus_minus(pm.pme_clock)}; "
+        f"Immediate Readiness on Return to D0{plus_minus(pm.immediate_readiness)}; "
         f"DSI{plus_minus(pm.dsi)}; Aux current {pm.aux_current_ma} mA; D1{plus_minus(pm.d1_support)}; "
         f"D2{plus_minus(pm.d2_support)}; PME from: {pme}"
     )
+    if pm.data_register_present:
+        data_text = (
+            f"Data_Select {pm.data_select} ({pm.data_select_name}); "
+            f"Data_Scale {pm.data_scale} ({pm.data_scale_name})"
+        )
+    else:
+        data_text = "Data_Select 0, Data_Scale 0: Data register reads 00 (not implemented, or nothing selected; 7.5.2.3)"
     pmcsr_meaning = (
         f"{pm.power_state_name}; No Soft Reset{plus_minus(pm.no_soft_reset)}; PME_En{plus_minus(pm.pme_enable)}; "
-        f"Data_Select {pm.data_select} ({pm.data_select_name}); Data_Scale {pm.data_scale} ({pm.data_scale_name}); "
-        f"PME_Status{plus_minus(pm.pme_status)}"
+        f"{data_text}; PME_Status{plus_minus(pm.pme_status)}"
     )
     return [
         _rline(pm.offset, 0x02, "PMC", f"{pm.pmc:04x}", pmc_meaning),
         _rline(pm.offset, 0x04, "PMCSR", f"{pm.pmcsr:04x}", pmcsr_meaning),
-        _rline(pm.offset, 0x06, "Reserved", f"{pm.reserved_byte:02x}", "bits 5:0 RsvdP, 7:6 undefined (old bridge extensions)"),
+        _rline(
+            pm.offset, 0x06, "Reserved", f"{pm.reserved_byte:02x}",
+            "bits 5:0 RsvdP, 7:6 undefined (Table 7-14 DWORD bits 21:16 / 23:22; pci_regs.h names 7:6 PPB_B2_B3 / BPCC_ENABLE)",
+        ),
         _rline(pm.offset, 0x07, "Data", f"{pm.data:02x}", "optional; 00 when not implemented"),
     ]
 
 
 def render_msi(m: Msi) -> list[str]:
     control = (
-        f"Enable{plus_minus(m.enable)}; {m.vectors_enabled} of {m.vectors_capable} vectors "
+        f"Enable{plus_minus(m.enable)}; "
+        f"{vector_text(m.vectors_enabled, m.multiple_message_enable)} of "
+        f"{vector_text(m.vectors_capable, m.multiple_message_capable)} vectors "
         f"(codes {m.multiple_message_enable}/{m.multiple_message_capable}, 2^code); "
         f"64-bit Address{plus_minus(m.address_64bit)}; Per-Vector Masking{plus_minus(m.per_vector_masking)}; "
         f"Extended Message Data capable{plus_minus(m.extended_data_capable)} enable{plus_minus(m.extended_data_enable)}"
     )
+    if m.problem:
+        control += f" [problem: {m.problem}]"
     lines = [
         _rline(m.offset, 0x02, "Message Control", f"{m.message_control:04x}", control),
         _rline(m.offset, 0x04, "Message Address", f"{m.message_address:08x}", "bits 31:2; DWORD aligned"),
@@ -340,10 +371,13 @@ def render_msi(m: Msi) -> list[str]:
             _rline(m.offset, 0x08, "Message Upper Addr", f"{m.message_upper_address:08x}",
                    f"bits 63:32 -> full address {m.full_address:016x}")
         )
-    lines.append(
-        _rline(m.offset, m.data_offset, "Message Data", f"{m.message_data:04x}",
-               f"low 16 bits of the DWORD; Extended Message Data (high 16 bits) {m.extended_message_data:04x}")
-    )
+    if m.extended_data_capable:
+        high = f"Extended Message Data (high 16 bits) {m.extended_message_data:04x}"
+    else:
+        # 7.7.1.6: without the capability those bits are not a register: undefined (no
+        # masking) or RsvdP (with masking).
+        high = f"high 16 bits {m.extended_message_data:04x}: not Extended Message Data Capable, so undefined here (7.7.1.6)"
+    lines.append(_rline(m.offset, m.data_offset, "Message Data", f"{m.message_data:04x}", f"low 16 bits of the DWORD; {high}"))
     if m.per_vector_masking:
         lines.append(_rline(m.offset, m.mask_offset, "Mask Bits", f"{m.mask_bits:08x}", "bit n = vector n masked"))
         lines.append(_rline(m.offset, m.pending_offset, "Pending Bits", f"{m.pending_bits:08x}", "bit n = vector n pending"))
@@ -351,17 +385,14 @@ def render_msi(m: Msi) -> list[str]:
 
 
 def render_msix(x: MsiX) -> list[str]:
-    def bar_text(bir: int, bar_offset: int | None) -> str:
-        return f"BIR {bir} = BAR at {bar_offset:02X}h" if bar_offset is not None else f"BIR {bir} (reserved code)"
-
     return [
         _rline(x.offset, 0x02, "Message Control", f"{x.message_control:04x}",
                f"Enable{plus_minus(x.enable)}; Function Mask{plus_minus(x.function_mask)}; "
                f"Table Size code {x.table_size_code} = {x.table_size} entries"),
         _rline(x.offset, 0x04, "Table Offset/BIR", f"{x.table_register:08x}",
-               f"{bar_text(x.table_bir, x.table_bar_offset)}, offset {x.table_offset:x}h (the table is in memory space)"),
+               f"{bir_text(x.table_bir, x.table_bar_offset)}, offset {x.table_offset:x}h (the table is in memory space)"),
         _rline(x.offset, 0x08, "PBA Offset/BIR", f"{x.pba_register:08x}",
-               f"{bar_text(x.pba_bir, x.pba_bar_offset)}, offset {x.pba_offset:x}h"),
+               f"{bir_text(x.pba_bir, x.pba_bar_offset)}, offset {x.pba_offset:x}h"),
     ]
 
 
@@ -370,24 +401,31 @@ def render_capabilities(cs: ConfigSpace, chain: CapabilityChain) -> str:
     lines = []
     for c in chain.entries:
         lines.append("")
+        length = c.structure_length
+        does_not_fit = length is not None and c.span < length
         if c.cap_id == 0x01:
-            if c.span < 8:
-                lines.append(cap_heading(c, "spec 7.5.2") + f"\n  [problem: only {c.span} bytes before the next start; the structure needs 8]")
+            if does_not_fit:
+                lines.append(cap_heading(c, "spec 7.5.2") + f"\n  [problem: {c.problem}]")
                 continue
             lines.append(cap_heading(c, "spec 7.5.2, 8 bytes"))
             lines += render_power_management(decode_power_management(cs, c.offset))
         elif c.cap_id == 0x05:
-            length = c.structure_length or 4
-            if c.span < length:
-                lines.append(cap_heading(c, "spec 7.7.1") + f"\n  [problem: only {c.span} bytes before the next start; the structure needs {length}]")
+            if length is None:
+                # Only for a hand-built dump: fewer than 4 bytes, so Message Control (bytes 2-3)
+                # could not be read. The three real frames always have at least 4.
+                lines.append(cap_heading(c, "spec 7.7.1") + f"\n  [problem: only {c.span} bytes; Message Control at +02h cannot be read]")
+                continue
+            if does_not_fit:
+                lines.append(cap_heading(c, "spec 7.7.1") + f"\n  [problem: {c.problem}]")
                 continue
             m = decode_msi(cs, c.offset)
-            shape = f"{'64' if m.address_64bit else '32'}-bit address, {'with' if m.per_vector_masking else 'no'} per-vector masking"
-            lines.append(cap_heading(c, f"spec 7.7.1, {m.structure_length} bytes: {shape}"))
+            width = "64" if m.address_64bit else "32"
+            masking = "with" if m.per_vector_masking else "no"
+            lines.append(cap_heading(c, f"spec 7.7.1, {m.structure_length} bytes by DWORD count: {width}-bit address, {masking} per-vector masking"))
             lines += render_msi(m)
         elif c.cap_id == 0x11:
-            if c.span < 12:
-                lines.append(cap_heading(c, "spec 7.7.2") + f"\n  [problem: only {c.span} bytes before the next start; the structure needs 12]")
+            if does_not_fit:
+                lines.append(cap_heading(c, "spec 7.7.2") + f"\n  [problem: {c.problem}]")
                 continue
             lines.append(cap_heading(c, "spec 7.7.2, 12 bytes"))
             lines += render_msix(decode_msix(cs, c.offset))
@@ -399,4 +437,5 @@ def render_capabilities(cs: ConfigSpace, chain: CapabilityChain) -> str:
         else:
             lines.append(cap_heading(c, "no decoder in this tool") + "\n  bytes only:")
             lines.append(render_hex_rebased(c.structure_data, c.offset))
+    # The loop puts a blank line before every block; drop the one before the first.
     return "\n".join(lines).lstrip("\n")

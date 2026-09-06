@@ -1,20 +1,24 @@
 """Power Management capability, ID 01h (spec 7.5.2), 8 bytes.
 
-[Ahead] Aidan has not decoded these registers by hand yet; the chain entry
-is taught, the register contents are not. Every bit below comes from the
-spec's own tables, read twice independently.
+[Ahead] The tool decodes these registers; Aidan has not yet worked through
+them by hand. The chain entry itself is taught. Every bit below comes from
+the spec's own tables, read twice independently.
 
 Layout (7.5.2, Figure 7-17), offsets relative to the capability's start:
   +00h Capability ID (01h)        +01h Next Capability Pointer
   +02h PMC, Power Management Capabilities (16 bits, 7.5.2.1 Table 7-13)
   +04h PMCSR, Power Management Control/Status (16 bits, 7.5.2.2 Table 7-14)
-  +06h Reserved byte (bits 5:0 RsvdP, bits 7:6 undefined, once bridge extensions)
+  +06h Reserved byte: Table 7-14 DWORD bits 21:16 RsvdP, 23:22 undefined
+       ("defined in previous specifications"; Linux pci_regs.h still names
+       them PPB_B2_B3 and BPCC_ENABLE, the old bridge extensions)
   +07h Data (8 bits, optional, 7.5.2.3 Table 7-15)
 
 A frame note: the spec numbers Table 7-13 as one 32-bit register at offset
 00h whose low 16 bits are the ID and next pointer, so the spec's bit 16 is
 PMC bit 0 at +02h. This module reads the 16-bit PMC at +02h and uses the
-16-bit bit numbers; each field comment gives the spec's DWORD bit too.
+16-bit bit numbers; each field comment gives the spec's DWORD bit too. The
+same holds for PMCSR: Table 7-14 is a DWORD at 04h whose bits 15:0 are the
+16-bit PMCSR, so those numbers need no shift.
 """
 
 from dataclasses import dataclass
@@ -33,11 +37,14 @@ POWER_STATES = {0: "D0", 1: "D1", 2: "D2", 3: "D3hot"}
 # PMC bits 15:11 PME_Support (spec bits 31:27): one bit per power state, lowest bit = D0.
 PME_STATES = ["D0", "D1", "D2", "D3hot", "D3cold"]
 
-# PMCSR bits 12:9 Data_Select and 14:13 Data_Scale (Table 7-14), for the optional Data register.
+# Data_Select (PMCSR bits 12:9) and Data_Scale (bits 14:13): positions from Table 7-14
+# (7.5.2.2); the meaning of each value from Table 7-16 (7.5.2.3, Power Consumption /
+# Dissipation Reporting). Data_Select 9-15 are Reserved there, and for them Data_Scale
+# is "Reserved / TBD".
 DATA_SELECT = {
     0: "D0 power consumed", 1: "D1 power consumed", 2: "D2 power consumed", 3: "D3 power consumed",
     4: "D0 power dissipated", 5: "D1 power dissipated", 6: "D2 power dissipated", 7: "D3 power dissipated",
-    8: "common logic power (multi-function devices)",
+    8: "common logic power consumption (multi-function device, Function 0 only)",
 }
 DATA_SCALE = {0: "unknown", 1: "0.1x", 2: "0.01x", 3: "0.001x"}
 
@@ -48,7 +55,11 @@ class PowerManagement:
     pmc: int  # +02h, raw 16 bits
     version: int  # PMC 2:0 (spec 18:16): must be 011b = 3 for this spec
     pme_clock: bool  # PMC 3 (spec 19): legacy, hardwired 0 on PCIe
-    immediate_readiness: bool  # PMC 4 (spec 20): ready right after entering D0
+    # PMC 4 (spec 20), Immediate_Readiness_on_Return_to_D0: ready right after entering D0.
+    # A different bit from the header's Status bit 0 "Immediate Readiness" (7.5.1.1.4), which
+    # is about readiness after a reset. pci_regs.h still names this mask PCI_PM_CAP_RESERVED;
+    # PCIe 5.0 Table 7-13 defines it. lspci does not print it.
+    immediate_readiness: bool
     dsi: bool  # PMC 5 (spec 21): Device Specific Initialization needed after D0uninitialized
     aux_current_code: int  # PMC 8:6 (spec 24:22)
     d1_support: bool  # PMC 9 (spec 25)
@@ -61,7 +72,7 @@ class PowerManagement:
     data_select: int  # PMCSR 12:9
     data_scale: int  # PMCSR 14:13
     pme_status: bool  # PMCSR 15, RW1CS: a PME is pending
-    reserved_byte: int  # +06h raw (bits 5:0 RsvdP, 7:6 undefined)
+    reserved_byte: int  # +06h raw: Table 7-14 DWORD bits 21:16 RsvdP (byte 5:0), 23:22 undefined (byte 7:6)
     data: int  # +07h, optional Data register, 00h when not implemented
 
     @property
@@ -74,16 +85,28 @@ class PowerManagement:
 
     @property
     def pme_states(self) -> list[str]:
-        """The states the Function can raise PME from: PME_Support bit n set -> PME_STATES[n]."""
+        """The states the Function can raise PME from: PME_Support bit n set -> PME_STATES[n].
+
+        enumerate() hands out (0, "D0"), (1, "D1"), ... so n is the bit to test for each name.
+        """
         return [name for n, name in enumerate(PME_STATES) if bit(self.pme_support, n)]
 
     @property
     def data_select_name(self) -> str:
-        return DATA_SELECT.get(self.data_select, f"reserved ({self.data_select})")
+        # .get with a default: codes 9-15 are Reserved in Table 7-16
+        return DATA_SELECT.get(self.data_select, "reserved")
 
     @property
     def data_scale_name(self) -> str:
+        if self.data_select > 8:
+            return "reserved/TBD"  # Table 7-16: no scale is defined for a reserved selection
         return DATA_SCALE[self.data_scale]
+
+    @property
+    def data_register_present(self) -> bool:
+        """7.5.2.3: an unimplemented Data register reads 00h with Data_Select and Data_Scale
+        hardwired to 0; any non-zero value among the three means something is there."""
+        return bool(self.data or self.data_select or self.data_scale)
 
 
 def decode_pmc(value: int) -> dict:

@@ -23,10 +23,12 @@ at 100h; that chain is a different list with a different header format
 (extcaps.py).
 
 Two numbers per entry, and only one of them is spec:
-- `structure_length` is the spec's size of the capability when the spec fixes
-  it or the capability declares it (Power Management 8 bytes, MSI-X 12 bytes,
-  Vendor-Specific from its own Capability Length byte). MSI and PCI Express
-  sizes depend on their own registers; their decoders supply them.
+- `structure_length` is the size of the capability when the spec fixes it or
+  the capability declares it (Power Management 8 bytes, MSI-X 12 bytes,
+  Vendor-Specific from its own Capability Length byte). MSI's comes from its
+  Message Control bits through msi.msi_structure_length (a DWORD count off
+  the spec's figures); the PCI Express capability's comes from its own
+  decoder.
 - `span` is a choice: the gap from this entry's start to the next capability
   start in address order (or to 100h). It is how the chain reads by eye,
   "this section starts from 00 and runs until the next one begins", and it
@@ -87,9 +89,17 @@ class Capability:
         if self.cap_id == 0x09:
             return self.vendor_specific_length
         if self.cap_id == 0x05 and len(self.data) >= 4:
-            # bytes 2-3 are Message Control, little-endian (7.7.1.2)
+            # Bytes 2-3 are Message Control (7.7.1.2): the same little-endian flip as
+            # ConfigSpace.u16, done on the raw slice because this object holds bytes.
             return msi_structure_length(int.from_bytes(self.data[2:4], "little"))
         return FIXED_STRUCTURE_SIZE.get(self.cap_id)  # dict.get: None when the ID is not listed
+
+    @property
+    def boundary_text(self) -> str:
+        """What the span runs up to: the next capability's start, or the end of the space."""
+        if self.end >= PCI_COMPATIBLE_END:
+            return "the end of the PCI-compatible space (100h)"
+        return f"the next capability at {self.end:02X}h"
 
     @property
     def structure_data(self) -> bytes:
@@ -213,11 +223,12 @@ def _build_entries(cs: ConfigSpace, found: list[tuple[int, int, int]]) -> list[C
             data=data,
             problem=problem,
         )
-        length = cap.vendor_specific_length
-        if length is not None and length < 3:
-            cap.problem = f"declared length {length:02X}h is below the 3 header bytes it must include (7.9.4 Table 7-160)"
+        vs_length = cap.vendor_specific_length
+        length = cap.structure_length  # spec-fixed, declared, or from Message Control; None if unknown
+        if vs_length is not None and vs_length < 3:
+            cap.problem = f"declared length {vs_length:02X}h is below the 3 header bytes it must include (7.9.4 Table 7-160)"
         elif length is not None and length > span:
-            where = f"the next capability at {end:02X}h" if later else "the end of the PCI-compatible space (100h)"
-            cap.problem = f"declared length {length:02X}h runs past {where}"
+            what = "declared length" if cap.cap_id == 0x09 else "structure"
+            cap.problem = f"{what} {length} bytes runs past {cap.boundary_text}; only {span} bytes are there"
         entries.append(cap)
     return entries

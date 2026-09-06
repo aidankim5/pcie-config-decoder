@@ -33,23 +33,30 @@ def test_gpu_power_management_at_60h():
 
 def test_ssd_power_management_at_40h():
     # Bytes at 40h: 01 50 13 00 08 00 00 00 -> PMC 0013h: version 3 and bit 4 Immediate
-    # Readiness on Return to D0 (the SSD's Status register bit 0 says the same).
+    # Readiness on Return to D0. That is a different bit from the header's Status bit 0
+    # "Immediate Readiness" (7.5.1.1.4, about readiness after a reset); the SSD has both set.
     # lspci: PME(D0-,D1-,D2-,D3hot-,D3cold-); Status: D0 NoSoftRst+
     pm = decode_power_management(load_config_space(SSD), 0x40)
     assert pm.pmc == 0x0013 and pm.version == 3 and pm.immediate_readiness
     assert pm.pme_support == 0 and pm.pme_states == []
     assert pm.power_state_name == "D0" and pm.no_soft_reset
+    assert not pm.data_register_present
 
 
 def test_pm_encodings_on_hand_built_values():
     data = bytearray(256)
+    # bytes.fromhex: each two-digit pair becomes one byte, spaces are ignored (used to group DWORDs).
     data[0x40:0x48] = bytes.fromhex("01 00 ff ff 03 81 00 2a")  # PMC ffffh, PMCSR 8103h, Data 2ah
     pm = decode_power_management(ConfigSpace(bytes(data)), 0x40)
     assert pm.version == 7 and pm.pme_clock and pm.dsi and pm.d1_support and pm.d2_support
     assert pm.aux_current_ma == 375  # code 111b
     assert pm.pme_states == ["D0", "D1", "D2", "D3hot", "D3cold"]
     assert pm.power_state_name == "D3hot" and pm.pme_enable and pm.pme_status
-    assert pm.data == 0x2A
+    assert pm.data == 0x2A and pm.data_register_present
+    assert pm.data_select == 0 and pm.data_scale == 0
+    data[0x44:0x46] = bytes.fromhex("03 73")  # PMCSR 7303h: Data_Select 9 (reserved), Data_Scale 3
+    pm = decode_power_management(ConfigSpace(bytes(data)), 0x40)
+    assert pm.data_select == 9 and pm.data_select_name == "reserved" and pm.data_scale_name == "reserved/TBD"
 
 
 # --- MSI ------------------------------------------------------------------------------
@@ -96,6 +103,19 @@ def test_msi_layouts_follow_message_control():
     assert msi.mask_offset == 0x0C and msi.mask_bits == 0x0000000F
     assert msi.pending_offset == 0x10 and msi.pending_bits == 0x00000005
     assert msi.structure_length == 20
+    assert msi.problem == ""
+
+
+def test_msi_reserved_codes_and_enable_above_capable_are_flagged():
+    data = bytearray(256)
+    data[0x40:0x44] = bytes.fromhex("05 00 ed 01")  # Message Control 01edh: codes 6/6 (reserved)
+    msi = decode_msi(ConfigSpace(bytes(data)), 0x40)
+    assert msi.vectors_capable is None and msi.vectors_enabled is None
+    assert "reserved Multiple Message code" in msi.problem
+    data[0x42:0x44] = bytes.fromhex("51 00")  # 0051h: capable code 0 (1 vector), enable code 5 (32)
+    msi = decode_msi(ConfigSpace(bytes(data)), 0x40)
+    assert msi.vectors_capable == 1 and msi.vectors_enabled == 32
+    assert "exceeds" in msi.problem
 
 
 # --- MSI-X ----------------------------------------------------------------------------
@@ -141,9 +161,9 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert main(["decode", str(SSD)]) == NOT_YET
     out = capsys.readouterr().out
     assert "-- 40h Power Management (ID 01, spec 7.5.2, 8 bytes)  [ahead" in out
-    assert "  +02h (42h) PMC                  0013       version 3; PME Clock-; Immediate Readiness+; DSI-; Aux current 0 mA; D1-; D2-; PME from: none" in out
-    assert "  +04h (44h) PMCSR                0008       D0; No Soft Reset+; PME_En-;" in out
-    assert "-- 50h MSI (ID 05, spec 7.7.1, 16 bytes: 64-bit address, no per-vector masking)" in out
+    assert "  +02h (42h) PMC                  0013       version 3; PME Clock-; Immediate Readiness on Return to D0+; DSI-; Aux current 0 mA; D1-; D2-; PME from: none" in out
+    assert "  +04h (44h) PMCSR                0008       D0; No Soft Reset+; PME_En-; Data_Select 0, Data_Scale 0: Data register reads 00" in out
+    assert "-- 50h MSI (ID 05, spec 7.7.1, 16 bytes by DWORD count: 64-bit address, no per-vector masking)" in out
     assert "  +02h (52h) Message Control      008a       Enable-; 1 of 32 vectors (codes 0/5, 2^code); 64-bit Address+; Per-Vector Masking-" in out
     assert "-- B0h MSI-X (ID 11, spec 7.7.2, 12 bytes)  [ahead" in out
     assert "  +02h (B2h) Message Control      8010       Enable+; Function Mask-; Table Size code 16 = 17 entries" in out
@@ -155,16 +175,22 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert "  +02h (6Ah) Message Control      0081       Enable+; 1 of 1 vectors (codes 0/0, 2^code); 64-bit Address+" in out
     assert "  +04h (6Ch) Message Address      fee00d58" in out
     assert "  +08h (70h) Message Upper Addr   00000000   bits 63:32 -> full address 00000000fee00d58" in out
-    assert "  +0Ch (74h) Message Data         0000" in out
-    assert "  +02h (62h) PMC                  4803       version 3; PME Clock-; Immediate Readiness-; DSI-; Aux current 0 mA; D1-; D2-; PME from: D0, D3hot" in out
+    assert "  +0Ch (74h) Message Data         0000       low 16 bits of the DWORD; high 16 bits 0000: not Extended Message Data Capable" in out
+    assert "  +02h (62h) PMC                  4803       version 3; PME Clock-; Immediate Readiness on Return to D0-; DSI-; Aux current 0 mA; D1-; D2-; PME from: D0, D3hot" in out
 
     assert main(["decode", str(SSD), "--json"]) == NOT_YET
     doc = json.loads(capsys.readouterr().out)
     entries = doc["standard_capabilities"]["entries"]
     assert entries[0]["decoded"]["version"] == 3 and entries[0]["decoded"]["immediate_readiness"] is True
-    assert entries[1]["decoded"]["multiple_message_capable"] == 5
+    assert entries[0]["decoded"]["pme_states"] == [] and entries[0]["decoded"]["power_state_name"] == "D0"
+    assert entries[1]["decoded"]["multiple_message_capable"] == 5 and entries[1]["decoded"]["vectors_capable"] == 32
     assert entries[2]["decoded"] is None  # PCI Express: module 5
-    assert entries[3]["decoded"]["table_size_code"] == 16
+    assert entries[3]["decoded"]["table_size_code"] == 16 and entries[3]["decoded"]["table_size"] == 17
+
+    assert main(["decode", str(GPU), "--json"]) == NOT_YET
+    doc = json.loads(capsys.readouterr().out)
+    msi = doc["standard_capabilities"]["entries"][1]["decoded"]
+    assert msi["full_address"] == 0x00000000FEE00D58 and msi["vectors_enabled"] == 1
 
 
 def test_cli_flags_a_structure_that_does_not_fit(capsys, tmp_path):
@@ -180,4 +206,4 @@ def test_cli_flags_a_structure_that_does_not_fit(capsys, tmp_path):
     assert main(["decode", str(p)]) == NOT_YET
     out = capsys.readouterr().out
     assert "-- F8h MSI-X (ID 11, spec 7.7.2)" in out
-    assert "[problem: only 8 bytes before the next start; the structure needs 12]" in out
+    assert "[problem: structure 12 bytes runs past the end of the PCI-compatible space (100h); only 8 bytes are there]" in out
