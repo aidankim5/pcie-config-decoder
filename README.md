@@ -14,8 +14,17 @@ Advanced Error Reporting. It is built in three layers:
    the bytes.
 
 Status: being built one module at a time. This README grows with each module.
-Done so far: **module 1, parse** (`lspci -xxxx` text or raw binary -> bytes,
-`pcicfg decode <file> --hex`).
+Done so far:
+
+1. **parse**: `lspci -xxxx` text or raw binary -> bytes, `pcicfg decode <file> --hex`.
+2. **header and ids**: the Type 0 header, every register with its absolute
+   offset, raw value and meaning; `pcicfg decode <file>` prints it. Type 1
+   (bridge) headers: bus numbers only, tagged ahead.
+
+Taught vs ahead (expanded in the final README): taught = Type 0 header,
+standard and extended capability chains, PCI Express capability, AER, MSI
+basics, CF8/CFC vs ECAM. Ahead = Type 1 bridge headers, Power Management and
+MSI-X registers, Virtual Channel, Resizable BAR, L1 PM Substates, SR-IOV.
 
 ## How to get a dump
 

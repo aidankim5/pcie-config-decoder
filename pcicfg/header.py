@@ -3,8 +3,10 @@
 [Taught] Aidan decoded the Type 0 header of his GPU by hand: Vendor and
 Device ID, Command, Status, Class Code, Header Type, the six BARs, the
 Subsystem IDs, the Expansion ROM, the Capabilities Pointer, the interrupt pin.
-[Ahead] Type 1 (bridge) headers: only the three bus numbers at 18h-1Ah are
-decoded here; the rest of a bridge header is not.
+[Ahead] Type 1 (bridge) headers: only the common fields, the two BARs and the
+three bus numbers at 18h-1Ah are decoded here; the rest of a bridge header
+(I/O, memory and prefetchable windows, Secondary Status, Bridge Control, the
+ROM at 38h) is not.
 
 Spec sections (PCI Express Base 5.0):
 - 7.5.1.1 Type 0/1 Common Configuration Space: offsets 00h-0Fh, and 34h,
@@ -16,6 +18,10 @@ Spec sections (PCI Express Base 5.0):
 Every offset in this file is absolute (from the start of the function's
 configuration space). Every multi-byte field is read little-endian through
 ConfigSpace.u16/u32 (see parse.py).
+
+Python notes for reading this file: @dataclass writes __init__ and a readable
+repr from the field list (explained in parse.py); @property means "call it like
+an attribute", h.class_code rather than h.class_code().
 """
 
 from dataclasses import dataclass
@@ -25,8 +31,13 @@ from .parse import ConfigSpace
 
 
 def bit(value: int, n: int) -> bool:
-    """True when bit n of value is 1. (value >> n) moves bit n to position 0; & 1 keeps only it."""
-    return (value >> n) & 1 == 1
+    """True when bit n of value is 1.
+
+    (value >> n) moves bit n down to position 0; & 1 keeps only that bit;
+    == 1 turns the leftover 0 or 1 into False or True. The extra parentheses
+    are there because in Python & binds tighter than == (the opposite of C).
+    """
+    return ((value >> n) & 1) == 1
 
 
 def bits(value: int, hi: int, lo: int) -> int:
@@ -80,11 +91,25 @@ STATUS_BITS = [
     (15, "Detected Parity Error", "RW1C"),
 ]
 
-# Spec 7.5.1.1.9, Header Type Register, offset 0Eh, bits 6:0.
+# Spec 7.5.1.1.9, Header Type Register, offset 0Eh, bits 6:0, Table 7-6: only 0 and 1 are
+# defined for PCI Express; 2 was CardBus in older PCI (the name comes from Linux pci_regs.h,
+# PCI_HEADER_TYPE_CARDBUS) and is Reserved now; everything else is Reserved.
 HEADER_LAYOUTS = {0: "Type 0", 1: "Type 1 (bridge)", 2: "Type 2 (CardBus, reserved)"}
 
 # Spec 7.5.1.1.13, Interrupt Pin Register, offset 3Dh.
 INTERRUPT_PINS = {0: "none", 1: "INTA", 2: "INTB", 3: "INTC", 4: "INTD"}
+
+# Spec 7.5.1.2.4, Table 7-9, Expansion ROM bits 3:1 (PCIe 5.0 addition, not in older PCI).
+ROM_VALIDATION_STATUS = {
+    0: "validation not supported",
+    1: "validation in progress",
+    2: "validation pass, valid contents",
+    3: "validation pass, valid and trusted contents",
+    4: "validation fail, invalid contents",
+    5: "validation fail, valid but untrusted contents",
+    6: "warning pass, valid contents with warning",
+    7: "warning pass, valid and trusted contents with warning",
+}
 
 
 def decode_command(value: int) -> list[Bit]:
@@ -101,7 +126,7 @@ def decode_header_type(value: int) -> tuple[int, bool]:
     """Spec 7.5.1.1.9, Header Type Register, offset 0Eh.
 
     Returns (layout, multi_function): bits 6:0 are the layout (0 = Type 0,
-    1 = Type 1 bridge, 2 reserved), bit 7 is the Multi-Function Device bit.
+    1 = Type 1 bridge, 2 and up reserved), bit 7 is the Multi-Function Device bit.
     """
     return bits(value, 6, 0), bit(value, 7)
 
@@ -121,17 +146,19 @@ class Bar:
     raw: int  # the DWORD as read
     kind: str  # "memory", "io", or "empty" (reads as zero)
     address: int = 0
-    width: int = 32  # 32 or 64 (memory only)
+    width: int = 32  # 32 or 64 (memory only), exactly what bits 2:1 encode
     prefetchable: bool = False
     upper_raw: int | None = None  # the second DWORD of a 64-bit BAR, at offset + 4
-    # Sizing needs a write of all ones and a read-back (spec 7.5.1.2.1); a dump cannot do that.
-    size_note: str = "size: not determinable from a dump"
+    # Sizing needs a write of all ones and a read-back (spec 7.5.1.2.1); a dump cannot do
+    # that. A Resizable BAR capability, when a device has one, records the current size
+    # (spec 7.8.6) [ahead]; the header itself never does.
+    size_note: str = "size: not determinable from a dump (needs the write-all-ones probe)"
     problem: str = ""  # set when the BAR breaks a spec rule, e.g. a reserved type encoding
 
     @property
     def slots(self) -> int:
-        """How many DWORD slots this BAR occupies: 2 for a 64-bit memory BAR, else 1."""
-        return 2 if self.width == 64 else 1
+        """How many DWORD slots this BAR occupies: 2 when its upper half was read, else 1."""
+        return 2 if self.upper_raw is not None else 1
 
 
 def decode_bar(cs: ConfigSpace, index: int, count: int = 6) -> Bar:
@@ -146,28 +173,41 @@ def decode_bar(cs: ConfigSpace, index: int, count: int = 6) -> Bar:
     if raw == 0:
         # "Unimplemented Base Address registers are hardwired to zero" (7.5.1.2.1);
         # an implemented but unassigned BAR also reads as zero, and a dump cannot tell.
-        return Bar(index, offset, raw, "empty")
+        return Bar(index=index, offset=offset, raw=raw, kind="empty")
     if bit(raw, 0):
-        return Bar(index, offset, raw, "io", address=raw & ~0x3)  # bits 31:2
+        # ~0x3 is every bit set except bits 1:0 (Python ints have no fixed width, so ~ flips
+        # all higher bits too); & with it clears the two low bits and keeps address bits 31:2.
+        problem = "bit 1 is reserved and must read 0b (7.5.1.2.1)" if bit(raw, 1) else ""
+        return Bar(index=index, offset=offset, raw=raw, kind="io", address=raw & ~0x3, problem=problem)
     memory_type = bits(raw, 2, 1)  # Table 7-8: 00b = 32-bit, 10b = 64-bit, 01b and 11b reserved
     width = 64 if memory_type == 0b10 else 32
+    # :02b = binary, 2 digits, zero-padded, so it reads like Table 7-8 (01 or 11)
     problem = "" if memory_type in (0b00, 0b10) else f"reserved memory type {memory_type:02b}"
-    address = raw & ~0xF  # bits 31:4
+    address = raw & ~0xF  # same ~mask idea as the I/O BAR above: keep bits 31:4
     upper = None
     if width == 64:
         if index + 1 >= count:
-            problem = "64-bit BAR in the last slot: no room for its upper half"
-            width = 32
+            problem = "64-bit BAR in the last slot: no room for its upper half, low half shown"
         else:
             upper = cs.u32(offset + 4)
             address |= upper << 32  # the next DWORD is address bits 63:32
-    return Bar(index, offset, raw, "memory", address, width, bit(raw, 3), upper, problem=problem)
+    return Bar(
+        index=index,
+        offset=offset,
+        raw=raw,
+        kind="memory",
+        address=address,
+        width=width,
+        prefetchable=bit(raw, 3),
+        upper_raw=upper,
+        problem=problem,
+    )
 
 
 def decode_bars(cs: ConfigSpace, count: int) -> list[Bar]:
-    """Walk the BAR slots in order; a 64-bit BAR consumes the slot after it.
+    """Spec 7.5.1.2.1 (Type 0: six slots, 10h-24h) and 7.5.1.3.1 (Type 1: two slots, 10h-14h).
 
-    count is 6 for a Type 0 header (10h-24h) and 2 for a Type 1 header (10h-14h).
+    Walk the slots in order; a 64-bit BAR consumes the slot after it.
     """
     out = []
     index = 0
@@ -182,7 +222,7 @@ def decode_bars(cs: ConfigSpace, count: int) -> list[Bar]:
 class CommonHeader:
     """Spec 7.5.1.1: the fields both header types share (00h-0Fh, 34h, 3Ch, 3Dh)."""
 
-    vendor_id: int  # 00h, 16 bits
+    vendor_id: int  # 00h, 16 bits; FFFFh means no Function is present (7.5.1.1.1)
     device_id: int  # 02h, 16 bits
     command: int  # 04h, 16 bits, raw
     command_bits: list[Bit]
@@ -193,15 +233,27 @@ class CommonHeader:
     prog_if: int  # 09h: Class Code bits 7:0, Programming Interface
     sub_class: int  # 0Ah: Class Code bits 15:8
     base_class: int  # 0Bh: Class Code bits 23:16
-    cache_line_size: int  # 0Ch, in units of DWORDs (PCI convention; 0x10 = 64 bytes)
-    latency_timer: int  # 0Dh, hardwired 00h on PCI Express
+    # 0Ch; units of DWORDs per the PCI Local Bus spec 3.0 section 6.2.4 (0x10 = 64 bytes).
+    # PCIe Base 7.5.1.1.7 keeps it only for legacy compatibility: no effect on PCIe behavior.
+    cache_line_size: int
+    latency_timer: int  # 0Dh, hardwired 00h on PCI Express (7.5.1.1.8)
     header_type: int  # 0Eh, raw
     header_layout: int  # Header Type bits 6:0
     multi_function: bool  # Header Type bit 7
     bist: int  # 0Fh, raw (bit 7 BIST Capable, bit 6 Start BIST, bits 3:0 Completion Code)
-    capabilities_pointer: int  # 34h, bits 1:0 masked off (spec 7.5.1.1.11)
-    interrupt_line: int  # 3Ch, programmed by system software
-    interrupt_pin: int  # 3Dh, 0 = none, 1-4 = INTA-INTD
+    capabilities_pointer_raw: int  # 34h, the byte as it sits in the dump
+    capabilities_pointer: int  # 34h with bits 1:0 masked off, as spec 7.5.1.1.11 requires
+    interrupt_line: int  # 3Ch, programmed by system software (7.5.1.1.12)
+    interrupt_pin: int  # 3Dh, 0 = none, 1-4 = INTA-INTD (7.5.1.1.13)
+
+    @property
+    def function_present(self) -> bool:
+        """Spec 7.5.1.1.1: Vendor ID FFFFh means no Function is present.
+
+        A read of an empty slot or an unpowered device returns all ones, so an
+        all-FF dump is not device state and must not be decoded as if it were.
+        """
+        return self.vendor_id != 0xFFFF
 
     @property
     def class_code(self) -> int:
@@ -211,6 +263,10 @@ class CommonHeader:
     @property
     def class_name(self) -> str:
         return ids.class_name(self.base_class, self.sub_class, self.prog_if)
+
+    @property
+    def prog_if_name(self) -> str | None:
+        return ids.prog_if_name(self.base_class, self.sub_class, self.prog_if)
 
     @property
     def vendor_name(self) -> str:
@@ -227,22 +283,32 @@ class CommonHeader:
 
     @property
     def layout_name(self) -> str:
+        # dict.get(key, default): the value for key, or default when the key is absent
         return HEADER_LAYOUTS.get(self.header_layout, f"reserved layout {self.header_layout}")
+
+    @property
+    def layout_is_defined(self) -> bool:
+        """Only layouts 0 and 1 are defined for PCI Express (spec 7.5.1.1.9, Table 7-6)."""
+        return self.header_layout in (0, 1)
 
     @property
     def interrupt_pin_name(self) -> str:
         return INTERRUPT_PINS.get(self.interrupt_pin, f"reserved value {self.interrupt_pin:#04x}")
 
 
+# Inherits every CommonHeader field (they come first in the generated __init__, in this
+# order) and every CommonHeader property; the fields below are appended after them.
 @dataclass
 class Type0Header(CommonHeader):
-    """Spec 7.5.1.2: everything an endpoint's header adds to the common part."""
+    """Spec 7.5.1.2: everything an endpoint's header adds to the common part (10h-33h, 3Eh-3Fh)."""
 
     bars: list[Bar]  # 10h-24h, six slots
     cardbus_cis: int  # 28h, hardwired 0 on PCI Express (7.5.1.2.2)
     subsystem_vendor_id: int  # 2Ch (7.5.1.2.3): who built the board
     subsystem_id: int  # 2Eh
-    expansion_rom: int  # 30h, raw (7.5.1.2.4)
+    # 30h, raw (7.5.1.2.4, Table 7-9): bit 0 Enable, bits 3:1 Validation Status,
+    # bits 7:4 Validation Details, bits 10:8 RsvdP, bits 31:11 Base Address.
+    expansion_rom: int
     min_gnt: int  # 3Eh, hardwired 0 on PCI Express (7.5.1.2.5)
     max_lat: int  # 3Fh, hardwired 0
 
@@ -254,20 +320,36 @@ class Type0Header(CommonHeader):
     @property
     def expansion_rom_address(self) -> int:
         """Expansion ROM bits 31:11; the ROM is at least 2 KB aligned (7.5.1.2.4)."""
-        return self.expansion_rom & ~0x7FF
+        return self.expansion_rom & ~0x7FF  # same ~mask idea as in decode_bar
+
+    @property
+    def expansion_rom_validation_status(self) -> int:
+        """Expansion ROM bits 3:1 (7.5.1.2.4, Table 7-9); 0 when validation is unsupported."""
+        return bits(self.expansion_rom, 3, 1)
+
+    @property
+    def expansion_rom_validation_details(self) -> int:
+        """Expansion ROM bits 7:4 (7.5.1.2.4, Table 7-9); implementation specific."""
+        return bits(self.expansion_rom, 7, 4)
 
     @property
     def subsystem_vendor_name(self) -> str:
         return ids.vendor_name(self.subsystem_vendor_id)
 
+    @property
+    def subsystem_name(self) -> str:
+        return ids.subsystem_name(self.subsystem_vendor_id, self.subsystem_id)
+
 
 @dataclass
 class Type1Header(CommonHeader):
-    """[Ahead] Spec 7.5.1.3: a bridge's header. Only the bus numbers are decoded."""
+    """[Ahead] Spec 7.5.1.3: a bridge's header. Two BARs (10h-14h) and the bus numbers (18h-1Ah)."""
 
     bars: list[Bar]  # 10h-14h, two slots (7.5.1.3.1)
-    primary_bus: int  # 18h (7.5.1.3.2): the bus the bridge sits on
-    secondary_bus: int  # 19h (7.5.1.3.3): the bus directly behind it
+    # 18h (7.5.1.3.2): the upstream bus number software writes here for legacy compatibility;
+    # PCIe Functions capture their own bus number from Configuration Writes (spec 2.2.6).
+    primary_bus: int
+    secondary_bus: int  # 19h (7.5.1.3.3): the bus directly behind the bridge
     subordinate_bus: int  # 1Ah (7.5.1.3.4): the highest bus number behind it
 
 
@@ -277,6 +359,7 @@ def decode_common_header(cs: ConfigSpace) -> CommonHeader:
     status = cs.u16(0x06)
     header_type = cs.u8(0x0E)
     layout, multi = decode_header_type(header_type)
+    cap_ptr_raw = cs.u8(0x34)
     return CommonHeader(
         vendor_id=cs.u16(0x00),
         device_id=cs.u16(0x02),
@@ -295,17 +378,20 @@ def decode_common_header(cs: ConfigSpace) -> CommonHeader:
         header_layout=layout,
         multi_function=multi,
         bist=cs.u8(0x0F),
-        capabilities_pointer=cs.u8(0x34) & ~0x3,  # bottom two bits reserved (7.5.1.1.11)
+        capabilities_pointer_raw=cap_ptr_raw,
+        capabilities_pointer=cap_ptr_raw & ~0x3,  # bottom two bits reserved (7.5.1.1.11)
         interrupt_line=cs.u8(0x3C),
         interrupt_pin=cs.u8(0x3D),
     )
 
 
 def decode_type0_header(cs: ConfigSpace) -> Type0Header:
-    """Spec 7.5.1.2, Type 0 Configuration Space Header (an endpoint)."""
+    """Spec 7.5.1.2, Type 0 Configuration Space Header: common fields plus 10h-33h and 3Eh-3Fh."""
     common = decode_common_header(cs)
     return Type0Header(
-        **vars(common),  # copy the common fields, then add the Type 0 ones
+        # vars(common) is the dict {field name: value} of the common header; ** spreads that
+        # dict as keyword arguments, so this call is Type0Header(vendor_id=..., ..., bars=...).
+        **vars(common),
         bars=decode_bars(cs, 6),
         cardbus_cis=cs.u32(0x28),
         subsystem_vendor_id=cs.u16(0x2C),
@@ -317,10 +403,10 @@ def decode_type0_header(cs: ConfigSpace) -> Type0Header:
 
 
 def decode_type1_header(cs: ConfigSpace) -> Type1Header:
-    """[Ahead] Spec 7.5.1.3, Type 1 header: common fields, two BARs, and the bus numbers."""
+    """[Ahead] Spec 7.5.1.3, Type 1 header: common fields, BARs at 10h-14h, bus numbers at 18h-1Ah."""
     common = decode_common_header(cs)
     return Type1Header(
-        **vars(common),
+        **vars(common),  # same trick as decode_type0_header
         bars=decode_bars(cs, 2),
         primary_bus=cs.u8(0x18),
         secondary_bus=cs.u8(0x19),
@@ -329,8 +415,13 @@ def decode_type1_header(cs: ConfigSpace) -> Type1Header:
 
 
 def decode_header(cs: ConfigSpace) -> Type0Header | Type1Header:
-    """Pick the decoder from Header Type bits 6:0 (spec 7.5.1.1.9)."""
+    """Pick the decoder from Header Type bits 6:0 at offset 0Eh (spec 7.5.1.1.9).
+
+    Layout 1 is a bridge. Layout 0 is an endpoint. Reserved layouts (2 and up)
+    also take the Type 0 path so their bytes are at least shown; the renderer
+    labels them as reserved and does not call them taught.
+    """
     layout, _ = decode_header_type(cs.u8(0x0E))
     if layout == 1:
         return decode_type1_header(cs)
-    return decode_type0_header(cs)  # layout 0; reserved layouts are decoded as Type 0 with a warning upstream
+    return decode_type0_header(cs)

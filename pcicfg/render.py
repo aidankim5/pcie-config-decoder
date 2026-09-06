@@ -3,10 +3,13 @@
 The header view lists one line per register: absolute offset, name, raw value
 as it sits in the dump (little-endian already flipped), then the decoded
 meaning. The layout is a choice made to match how the header was taught:
-offset first, so each line can be found in the hex rows.
+offset first, so each line can be found in the hex rows. Two more choices:
+the revision is always printed, even when it is 00, so the byte at 08h is
+always visible (lspci omits a zero revision); and the second DWORD of a
+64-bit BAR is printed on the BAR's own line with its absolute offset.
 """
 
-from .header import Bar, Bit, CommonHeader, Type0Header, Type1Header
+from .header import ROM_VALIDATION_STATUS, Bar, Bit, CommonHeader, Type0Header, Type1Header
 
 
 def render_hex(data: bytes, base: int = 0) -> str:
@@ -42,7 +45,8 @@ def _line(offset: int, name: str, raw: str, meaning: str = "") -> str:
 def render_bar(bar: Bar) -> str:
     raw = f"{bar.raw:08x}"
     if bar.upper_raw is not None:
-        raw += f" +{bar.offset + 4:02X}h {bar.upper_raw:08x}"  # the second slot of a 64-bit BAR
+        # The upper DWORD of a 64-bit BAR, shown with its own absolute offset (base + 4).
+        raw += f" {bar.offset + 4:02X}h:{bar.upper_raw:08x}"
     if bar.kind == "empty":
         meaning = "reads as zero: unimplemented, or not assigned"
     elif bar.kind == "io":
@@ -53,6 +57,14 @@ def render_bar(bar: Bar) -> str:
     if bar.problem:
         meaning += f" [problem: {bar.problem}]"
     return _line(bar.offset, f"BAR{bar.index}", raw, meaning)
+
+
+def render_headline(h: CommonHeader) -> str:
+    """The lspci-style first line: class: vendor device (rev), plus the prog-if name if known."""
+    line = f"{h.class_name}: {h.vendor_name} {h.device_name} (rev {h.revision_id:02x})"
+    if h.prog_if_name:
+        line += f" (prog-if {h.prog_if:02x} [{h.prog_if_name}])"
+    return line
 
 
 def render_common(h: CommonHeader) -> list[str]:
@@ -78,35 +90,78 @@ def render_common(h: CommonHeader) -> list[str]:
 
 
 def render_tail(h: CommonHeader) -> list[str]:
+    cap_note = ""
+    if h.capabilities_pointer_raw != h.capabilities_pointer:
+        cap_note = f"-> {h.capabilities_pointer:02x}h (bits 1:0 are reserved, masked off per 7.5.1.1.11)"
+    if not h.has_capabilities_list:
+        cap_note = (cap_note + " (Status bit 4 clear: no capability list)").strip()
+    line_note = ""
+    if h.interrupt_line == 0xFF:
+        # A PCI convention kept by Linux, not PCIe 5.0 spec text; lspci's "routed to IRQ N"
+        # comes from the kernel's own assignment, not from this byte.
+        line_note = "ff = unknown / no connection (PCI convention)"
     return [
-        _line(0x34, "Capabilities Ptr", f"{h.capabilities_pointer:02x}",
-              "" if h.has_capabilities_list else "(Status bit 4 clear: no capability list)"),
-        _line(0x3C, "Interrupt Line", f"{h.interrupt_line:02x}"),
+        _line(0x34, "Capabilities Ptr", f"{h.capabilities_pointer_raw:02x}", cap_note),
+        _line(0x3C, "Interrupt Line", f"{h.interrupt_line:02x}", line_note),
         _line(0x3D, "Interrupt Pin", f"{h.interrupt_pin:02x}", h.interrupt_pin_name),
     ]
 
 
+def render_expansion_rom(h: Type0Header) -> str:
+    if h.expansion_rom == 0:
+        meaning = "reads as zero: no Expansion ROM, or not assigned"
+    else:
+        state = "enabled" if h.expansion_rom_enabled else "disabled"
+        meaning = f"at {h.expansion_rom_address:x}, {state}"
+        if h.expansion_rom_validation_status:
+            status = ROM_VALIDATION_STATUS[h.expansion_rom_validation_status]
+            meaning += f"; {status} (details {h.expansion_rom_validation_details:x})"
+    return _line(0x30, "Expansion ROM", f"{h.expansion_rom:08x}", meaning)
+
+
 def render_header(h: Type0Header | Type1Header) -> str:
-    lines = [f"{h.class_name}: {h.vendor_name} {h.device_name} (rev {h.revision_id:02x})"]
+    lines = [render_headline(h)]
+    if not h.function_present:
+        lines.append(
+            "Vendor ID FFFFh: no Function is present (spec 7.5.1.1.1). These bytes are the "
+            "all-ones response of an empty slot or an unpowered device, not device state."
+        )
+        lines += render_common(h)
+        return "\n".join(lines)
+    # isinstance: which of the two header classes decode_header built.
     if isinstance(h, Type0Header):
-        lines.append("Type 0 header (spec 7.5.1.1, 7.5.1.2)  [taught]")
+        if h.layout_is_defined:
+            lines.append("Type 0 header (spec 7.5.1.1, 7.5.1.2)  [taught]")
+        else:
+            lines.append(
+                f"Header Layout {h.header_layout:02x}h is reserved (spec 7.5.1.1.9 defines only 0 and 1); "
+                "00h-0Fh, 34h, 3Ch, 3Dh are common fields, 10h-3Fh are shown with Type 0 names as a guess"
+            )
         lines += render_common(h)
         lines += [render_bar(b) for b in h.bars]
-        rom_state = "enabled" if h.expansion_rom_enabled else "disabled"
         lines += [
             _line(0x28, "Cardbus CIS", f"{h.cardbus_cis:08x}"),
-            _line(0x2C, "Subsystem", f"{h.subsystem_vendor_id:04x}:{h.subsystem_id:04x}", h.subsystem_vendor_name),
-            _line(0x30, "Expansion ROM", f"{h.expansion_rom:08x}", f"at {h.expansion_rom_address:x}, {rom_state}"),
+            _line(
+                0x2C,
+                "Subsystem",
+                f"{h.subsystem_vendor_id:04x}:{h.subsystem_id:04x}",
+                f"{h.subsystem_vendor_name} {h.subsystem_name}",
+            ),
+            render_expansion_rom(h),
         ]
         lines += render_tail(h)
         lines.append(_line(0x3E, "Min_Gnt/Max_Lat", f"{h.min_gnt:02x} {h.max_lat:02x}", "legacy PCI, hardwired 0"))
     else:
-        lines.append("Type 1 header (spec 7.5.1.3)  [ahead: only the bus numbers are decoded]")
+        lines.append(
+            "Type 1 header (spec 7.5.1.3)  [ahead: common fields, two BARs and the bus numbers only; "
+            "the I/O, memory and prefetchable windows, Secondary Status, Bridge Control and the ROM at 38h "
+            "are not decoded]"
+        )
         lines += render_common(h)
         lines += [render_bar(b) for b in h.bars]
         lines += [
-            _line(0x18, "Primary Bus", f"{h.primary_bus:02x}", "the bus this bridge sits on"),
-            _line(0x19, "Secondary Bus", f"{h.secondary_bus:02x}", "the bus directly behind it"),
+            _line(0x18, "Primary Bus", f"{h.primary_bus:02x}", "legacy: upstream bus; PCIe functions do not use it (7.5.1.3.2)"),
+            _line(0x19, "Secondary Bus", f"{h.secondary_bus:02x}", "the bus directly behind the bridge"),
             _line(0x1A, "Subordinate Bus", f"{h.subordinate_bus:02x}", "the highest bus number behind it"),
         ]
         lines += render_tail(h)

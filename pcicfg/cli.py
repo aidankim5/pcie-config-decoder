@@ -75,6 +75,10 @@ def cmd_decode(args: argparse.Namespace) -> int:
     header = decode_header(cs)
 
     if args.json:
+        # asdict turns the dataclass (and its nested Bit/Bar lists) into plain dicts and lists,
+        # the only things json.dumps can write. JSON has no hex literal, so 4318 here is 0x10DE
+        # (a choice; hex strings would be the alternative). Properties are not fields, so the
+        # derived names are added by the render module later.
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
         print(json.dumps(doc, indent=2))
         print("json: capability chains not built yet (modules caps, pcie_cap, extcaps, aer)", file=sys.stderr)
@@ -103,5 +107,6 @@ def main(argv: list[str] | None = None) -> int:
         return NOT_YET
     except (ParseError, OSError, IndexError) as e:
         # OSError covers a missing file, a directory, or no permission to read.
+        # IndexError: a register read past the end of a short dump (ConfigSpace._check in parse.py).
         print(f"pcicfg: {e}", file=sys.stderr)
         return BAD_INPUT
