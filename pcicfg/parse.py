@@ -18,7 +18,8 @@ Three inputs are accepted:
 
 Dump sizes and what each one means (spec = PCI Express Base 5.0):
 
-- 64 bytes:   the header only (`lspci -x`). Spec 7.5.1.
+- 64 bytes:   the header only. `lspci -x` prints this much on purpose; lspci
+              -xxx/-xxxx and sysfs reads also stop at 64 when run without root.
 - 256 bytes:  everything the PCI-compatible configuration mechanism can reach
               (CF8/CFC, an 8-bit register field). Spec 7.2.1. The standard
               capability chain lives here.
@@ -26,11 +27,13 @@ Dump sizes and what each one means (spec = PCI Express Base 5.0):
               Spec 7.2.2. Extended capabilities start at offset 100h and exist
               only in this frame.
 
+Spec vs choice: the 256 and 4096 sizes are spec (7.2.1, 7.2.2). Accepting a
+64-byte file is a choice, made so a dump taken without sudo still shows its
+header. Any other size is refused rather than guessed at.
+
 This module does not decode anything. It only produces bytes and the three
 little-endian readers every later module uses.
 """
-
-from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -38,21 +41,33 @@ from pathlib import Path
 
 # One hex row as lspci prints it:
 #   "70: 00 00 00 00 00 00 00 00 10 b4 12 00 e1 8d 2c 11"
-# group 1 = the label (absolute offset of the first byte, 2 or 3 hex digits),
-# group 2 = the byte pairs. Rows start at column 0 in lspci output; leading
-# whitespace is tolerated for hand-pasted files.
+# The regex, piece by piece:
+#   ^\s*                      optional leading spaces (hand-pasted files; lspci itself
+#                             starts at column 0)
+#   ([0-9A-Fa-f]{2,3}):       the label, 2 or 3 hex digits, then a colon  -> group 1
+#   ((?:\s+[0-9A-Fa-f]{2})+)  one or more "spaces + two hex digits"       -> group 2
+#   \s*$                      optional trailing spaces, then end of line
 _HEX_ROW = re.compile(r"^\s*([0-9A-Fa-f]{2,3}):((?:\s+[0-9A-Fa-f]{2})+)\s*$")
+
+BYTES_PER_ROW = 16  # lspci always prints 16 per row; any other count is a damaged file
 
 # The first line of an lspci device block:
 #   "01:00.0 VGA compatible controller: NVIDIA Corporation ..."
-# With `lspci -D` the PCI domain is prefixed: "0000:01:00.0 ...".
+# (?P<name>...) names a group so the code can say m.group("bdf") instead of m.group(1).
+#   domain    optional, 4 or more hex digits then a colon. lspci prints it only with -D
+#             or when some device is outside domain 0 ("0000:01:00.0"; Intel VMD uses
+#             5-digit domains like "10000:e1:00.0")
+#   bus       2 hex digits (an 8-bit number)
+#   device    2 hex digits (really 5 bits, so 00-1f)
+#   function  one digit 0-7: a device has at most 8 functions (3 bits, spec 7.3.2)
+#   \s+(?P<desc>.*)$   at least one space, then the rest of the line is the description
 _BDF_LINE = re.compile(
-    r"^(?P<bdf>(?:[0-9A-Fa-f]{4}:)?[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\.[0-7])\s+(?P<desc>.*)$"
+    r"^\s*(?P<bdf>(?:[0-9A-Fa-f]{4,}:)?[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\.[0-7])\s+(?P<desc>.*)$"
 )
 
-# Choice, not spec: the dump sizes this tool expects and the name of each frame.
+# Choice, not spec: the three dump sizes this tool accepts and the name of each frame.
 FRAME_NAMES = {
-    64: "header only (lspci -x)",
+    64: "header only, 64 bytes (lspci -x, or lspci/sysfs run without root)",
     256: "PCI-compatible space, 256 bytes (CF8/CFC reach, spec 7.2.1)",
     4096: "full ECAM space, 4096 bytes (spec 7.2.2)",
 }
@@ -62,7 +77,7 @@ class ParseError(ValueError):
     """The dump file is not in a shape this module understands."""
 
 
-@dataclass
+@dataclass  # writes __init__ and a readable repr for us from the field list below
 class ConfigSpace:
     """The bytes of one function's configuration space plus where they came from.
 
@@ -71,11 +86,13 @@ class ConfigSpace:
     """
 
     data: bytes
-    source: str = ""
-    bdf: str | None = None
+    source: str = ""  # file path
+    origin: str = ""  # "lspci text" or "raw image": which branch of load_config_space ran
+    bdf: str | None = None  # "01:00.0" when the file had an lspci device line, else None
     description: str = ""  # lspci's first line after the BDF, if any
     lspci_text: str = ""  # lspci's decoded lines (the answer key), if any
 
+    # @property: call it like an attribute, cs.size, not cs.size().
     @property
     def size(self) -> int:
         return len(self.data)
@@ -89,25 +106,31 @@ class ConfigSpace:
     def has_extended_space(self) -> bool:
         """True when the dump reaches past offset FFh.
 
-        Extended capabilities start at 100h (spec 7.6.3), so a 256-byte dump
-        cannot contain any. Only ECAM (spec 7.2.2) reaches them.
+        Extended capabilities begin at offset 100h (spec 7.6.1; their header
+        format is 7.6.3), so a 256-byte dump cannot contain any. Only ECAM
+        (spec 7.2.2) reaches them.
         """
         return self.size > 0x100
 
     def _check(self, off: int, width: int) -> None:
+        """Refuse a read that starts before 0, runs past the end, or has a negative width."""
+        if width < 0:
+            raise ValueError(f"negative width {width}")
         if off < 0 or off + width > self.size:
             raise IndexError(
                 f"offset {off:#x} width {width} is outside this {self.size}-byte dump"
-            )
+            )  # {off:#x} prints the offset as 0x-prefixed hex
 
+    # u8/u16/u32 = unsigned 8-, 16-, 32-bit: one, two, or four bytes as one number.
     def u8(self, off: int) -> int:
         """The byte at absolute offset `off`."""
         self._check(off, 1)
-        return self.data[off]
+        return self.data[off]  # indexing one position gives an int, 0-255
 
     def u16(self, off: int) -> int:
         """Two bytes at `off`, little-endian: bytes `de 10` at 00h read as 0x10DE."""
         self._check(off, 2)
+        # data[off : off + 2] is a 2-byte slice (end is exclusive); "little" = first byte is low
         return int.from_bytes(self.data[off : off + 2], "little")
 
     def u32(self, off: int) -> int:
@@ -124,25 +147,42 @@ class ConfigSpace:
 def parse_lspci_hex(text: str) -> bytes:
     """Collect the labeled hex rows of one lspci block into bytes.
 
-    Rows must start at 00: and be contiguous: each row's label must equal the
-    number of bytes collected so far. Lines that are not hex rows (lspci's
-    decoded text) are skipped.
+    Rules, all of them checks on the file rather than guesses:
+    - rows must start at 00: and be contiguous: each row's label must equal
+      the number of bytes collected so far;
+    - every row carries exactly 16 bytes, as lspci prints them;
+    - the total must be one of the three frame sizes (64, 256, 4096).
+    Lines that are not hex rows (lspci's decoded text) are skipped.
     """
-    out = bytearray()
-    for lineno, line in enumerate(text.splitlines(), 1):
+    out = bytearray()  # a growable bytes object; bytes(out) freezes it at the end
+    for lineno, line in enumerate(text.splitlines(), 1):  # line numbers from 1 for messages
         m = _HEX_ROW.match(line)
         if not m:
             continue
-        label = int(m.group(1), 16)
+        label = int(m.group(1), 16)  # the label text is hex: "70" -> 112
         if label != len(out):
             raise ParseError(
                 f"line {lineno}: row label {label:#x} but {len(out):#x} bytes "
                 "collected so far; rows must be contiguous from 00:"
             )
-        out += bytes.fromhex(m.group(2))  # fromhex ignores the spaces between pairs
+        pairs = m.group(2).split()
+        if len(pairs) != BYTES_PER_ROW:
+            raise ParseError(
+                f"line {lineno}: {len(pairs)} bytes on the row; lspci prints {BYTES_PER_ROW}"
+            )
+        out += bytes.fromhex(" ".join(pairs))  # "de 10 89 24" -> b"\xde\x10\x89\x24"
     if not out:
         raise ParseError("no hex rows found (expected lines like '00: de 10 89 24 ...')")
+    if len(out) not in FRAME_NAMES:
+        raise ParseError(
+            f"{len(out)} bytes of hex rows; a dump is exactly 64, 256, or 4096 bytes"
+        )
     return bytes(out)
+
+
+def looks_like_lspci_text(text: str) -> bool:
+    """True if at least one line is a labeled hex row."""
+    return any(_HEX_ROW.match(line) for line in text.splitlines())
 
 
 def split_lspci_blocks(text: str) -> list[str]:
@@ -152,12 +192,12 @@ def split_lspci_blocks(text: str) -> list[str]:
     until the next such line. Text before the first BDF line is dropped. A file
     with no BDF line at all is one block.
     """
-    blocks: list[list[str]] = []
+    blocks: list[list[str]] = []  # one list of lines per device
     for line in text.splitlines():
         if _BDF_LINE.match(line):
-            blocks.append([line])
+            blocks.append([line])  # a new device begins
         elif blocks:
-            blocks[-1].append(line)
+            blocks[-1].append(line)  # -1 = the most recent block
     if not blocks:
         return [text]
     return ["\n".join(b) for b in blocks]
@@ -173,10 +213,11 @@ def parse_lspci_block(block: str, source: str = "") -> ConfigSpace:
         if m:
             bdf = m.group("bdf")
             description = m.group("desc").strip()
-    decoded = [ln for ln in lines if not _HEX_ROW.match(ln)]
+    decoded = [ln for ln in lines if not _HEX_ROW.match(ln)]  # everything but the hex rows
     return ConfigSpace(
         data=parse_lspci_hex(block),
         source=source,
+        origin="lspci text",
         bdf=bdf,
         description=description,
         lspci_text="\n".join(decoded),
@@ -186,22 +227,33 @@ def parse_lspci_block(block: str, source: str = "") -> ConfigSpace:
 def parse_lspci_all(text: str, source: str = "") -> list[ConfigSpace]:
     """Every device in a full `lspci -vvv -xxxx` listing, in file order.
 
-    Blocks with no hex rows (for example a device lspci could not read) are
-    skipped rather than aborting the whole file.
+    A block with no hex rows (a device lspci could not read) has nothing to
+    parse and is skipped rather than aborting the whole file.
     """
     devices = []
     for block in split_lspci_blocks(text):
-        try:
-            devices.append(parse_lspci_block(block, source))
-        except ParseError as e:
-            if "no hex rows" in str(e):
-                continue
-            raise
+        if not looks_like_lspci_text(block):
+            continue
+        devices.append(parse_lspci_block(block, source))
     return devices
 
 
-def looks_like_lspci_text(text: str) -> bool:
-    return any(_HEX_ROW.match(line) for line in text.splitlines())
+def decode_text(raw: bytes) -> str | None:
+    """File bytes -> text, or None when the file is not text at all.
+
+    UTF-8 is what Linux writes. A file that begins with the bytes FF FE or
+    FE FF is UTF-16, which is what Windows PowerShell 5.1 writes for
+    `ssh box "sudo lspci ..." > dump.txt`; the "utf-16" codec reads that
+    marker and picks the byte order. "utf-8-sig" also strips the marker
+    EF BB BF (a "byte order mark", BOM) that Notepad puts at the start of a
+    UTF-8 file.
+    """
+    try:
+        if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            return raw.decode("utf-16")
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return None
 
 
 def load_config_space(path: str | Path) -> ConfigSpace:
@@ -209,30 +261,29 @@ def load_config_space(path: str | Path) -> ConfigSpace:
 
     Detection order: if the file decodes as text and contains hex rows it is an
     lspci dump; otherwise it must be a raw binary image of exactly 64, 256, or
-    4096 bytes (the three frames in FRAME_NAMES). Any other length is rejected
-    rather than guessed at: a 20-byte file is not a configuration space.
+    4096 bytes (the three frames in FRAME_NAMES). The result records which
+    branch ran in `origin`, and the CLI prints it, so nothing is silent.
     """
     p = Path(path)
     raw = p.read_bytes()
-    text: str | None
-    try:
-        text = raw.decode("utf-8-sig")  # -sig strips a Notepad BOM if present
-    except UnicodeDecodeError:
-        text = None
+    text = decode_text(raw)
 
     if text is not None and looks_like_lspci_text(text):
-        blocks = split_lspci_blocks(text)
-        with_rows = [b for b in blocks if looks_like_lspci_text(b)]
-        if len(with_rows) > 1:
+        blocks = [b for b in split_lspci_blocks(text) if looks_like_lspci_text(b)]
+        if len(blocks) > 1:
             raise ParseError(
-                f"{p}: contains {len(with_rows)} devices; use `pcicfg all` for a full listing"
+                f"{p}: contains {len(blocks)} devices; use `pcicfg all` for a full listing"
             )
-        return parse_lspci_block(with_rows[0], source=str(p))
+        return parse_lspci_block(blocks[0], source=str(p))
 
-    if len(raw) in FRAME_NAMES:
-        return ConfigSpace(data=raw, source=str(p))
+    if len(raw) in FRAME_NAMES:  # `in` on a dict checks its keys: 64, 256, 4096
+        return ConfigSpace(data=raw, source=str(p), origin="raw image")
 
+    if text is None:
+        why = "not UTF-8 or UTF-16 text"
+    else:
+        why = "text with no hex rows (expected lines like '00: de 10 89 24 ...')"
     raise ParseError(
-        f"{p}: not an lspci text dump (no hex rows) and not a raw image "
-        f"({len(raw)} bytes; expected 64, 256, or 4096)"
+        f"{p}: {why}, and not a raw image either "
+        f"({len(raw)} bytes; a raw image is exactly 64, 256, or 4096 bytes)"
     )

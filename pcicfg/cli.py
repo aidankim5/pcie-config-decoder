@@ -2,9 +2,13 @@
 
 Module 1 implements `decode --hex`. The other paths say plainly that they are
 not built yet instead of printing something that looks decoded.
-"""
 
-from __future__ import annotations
+Exit codes (a choice, not spec):
+  0  done
+  1  bad input: the file is missing, unreadable, or not a dump
+  2  usage error (argparse's own convention: unknown command or flag)
+  3  the requested part of the tool is not built yet
+"""
 
 import argparse
 import sys
@@ -12,7 +16,7 @@ import sys
 from .parse import ParseError, load_config_space
 from .render import render_hex
 
-NOT_YET = 2  # exit code for "this part is not built yet"
+OK, BAD_INPUT, NOT_YET = 0, 1, 3  # 2 is taken by argparse
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,10 +24,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="pcicfg",
         description="Read and decode PCI Express configuration space.",
     )
+    # One sub-command per verb: `pcicfg decode ...`, `pcicfg all ...`, and so on.
+    # dest="cmd" stores which one was typed in args.cmd; required=True refuses none.
     sub = p.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("decode", help="decode one dump (lspci -xxxx text or raw binary)")
     d.add_argument("file")
+    # store_true: the flag is False unless typed, then True. No value follows it.
     d.add_argument("--json", action="store_true", help="JSON instead of text")
     d.add_argument(
         "--hex",
@@ -49,11 +56,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cmd_decode(args: argparse.Namespace) -> int:
     cs = load_config_space(args.file)
-    where = f"{cs.bdf} " if cs.bdf else ""
-    print(f"# {where}{cs.description}".rstrip())
-    print(f"# {cs.source}: {cs.size} bytes = {cs.frame}")
+    # Two "# ..." lines first: what device (when the file said), then what we read.
+    bdf_prefix = f"{cs.bdf} " if cs.bdf else ""
+    if bdf_prefix or cs.description:
+        print(f"# {bdf_prefix}{cs.description}".rstrip())
+    print(f"# {cs.source}: {cs.size} bytes ({cs.origin}) = {cs.frame}")
+    if "<access denied>" in cs.lspci_text:
+        print("# note: lspci was run without sudo, so only the first 64 bytes are present")
     if args.hex:
         print(render_hex(cs.data))
+    # Messages about what is missing go to stderr, so stdout stays clean data.
     if args.json or args.annotate:
         print("decode --json / --annotate: not built yet (module: render)", file=sys.stderr)
         return NOT_YET
@@ -63,20 +75,18 @@ def cmd_decode(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return NOT_YET
-    return 0
+    return OK
 
 
 def main(argv: list[str] | None = None) -> int:
+    # argv=None means "use the real command line"; tests pass a list instead.
     args = build_parser().parse_args(argv)
     try:
         if args.cmd == "decode":
             return cmd_decode(args)
         print(f"pcicfg {args.cmd}: not built yet", file=sys.stderr)
         return NOT_YET
-    except (ParseError, FileNotFoundError, IndexError) as e:
+    except (ParseError, OSError, IndexError) as e:
+        # OSError covers a missing file, a directory, or no permission to read.
         print(f"pcicfg: {e}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        return BAD_INPUT

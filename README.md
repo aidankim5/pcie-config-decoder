@@ -44,3 +44,6 @@ an NVIDIA RTX 3060 Ti (`10de:2489`, 01:00.0) and a Samsung 990 PRO NVMe
 (`144d:a80c`, 02:00.0), plus `lspci -tv` and `lspci -nn` of the same machine.
 lspci's own decoded text sits above the hex rows in each file and is the answer
 key the tests check against.
+Line endings were normalized to LF, which is what lspci wrote on Linux; the
+vault copies are CRLF. The parser accepts either, and UTF-16 files as written by
+Windows PowerShell redirection.
