@@ -1,7 +1,8 @@
 """Command line: decode, all, list, dump.
 
-Module 1 implements `decode --hex`. The other paths say plainly that they are
-not built yet instead of printing something that looks decoded.
+Built so far: `decode` prints the header (module 2) and, with --hex, the raw
+bytes (module 1). Everything else says plainly that it is not built yet
+instead of printing something that looks decoded.
 
 Exit codes (a choice, not spec):
   0  done
@@ -11,10 +12,13 @@ Exit codes (a choice, not spec):
 """
 
 import argparse
+import json
 import sys
+from dataclasses import asdict
 
-from .parse import ParseError, load_config_space
-from .render import render_hex
+from .header import decode_header
+from .parse import ConfigSpace, ParseError, load_config_space
+from .render import render_header, render_hex
 
 OK, BAD_INPUT, NOT_YET = 0, 1, 3  # 2 is taken by argparse
 
@@ -54,28 +58,39 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def cmd_decode(args: argparse.Namespace) -> int:
-    cs = load_config_space(args.file)
-    # Two "# ..." lines first: what device (when the file said), then what we read.
+def describe_source(cs: ConfigSpace) -> list[str]:
+    """The '# ...' lines that say what device and what file we are looking at."""
+    lines = []
     bdf_prefix = f"{cs.bdf} " if cs.bdf else ""
     if bdf_prefix or cs.description:
-        print(f"# {bdf_prefix}{cs.description}".rstrip())
-    print(f"# {cs.source}: {cs.size} bytes ({cs.origin}) = {cs.frame}")
+        lines.append(f"# {bdf_prefix}{cs.description}".rstrip())
+    lines.append(f"# {cs.source}: {cs.size} bytes ({cs.origin}) = {cs.frame}")
     if "<access denied>" in cs.lspci_text:
-        print("# note: lspci was run without sudo, so only the first 64 bytes are present")
-    if args.hex:
+        lines.append("# note: lspci was run without sudo, so only the first 64 bytes are present")
+    return lines
+
+
+def cmd_decode(args: argparse.Namespace) -> int:
+    cs = load_config_space(args.file)
+    header = decode_header(cs)
+
+    if args.json:
+        doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
+        print(json.dumps(doc, indent=2))
+        print("json: capability chains not built yet (modules caps, pcie_cap, extcaps, aer)", file=sys.stderr)
+        return NOT_YET
+
+    print("\n".join(describe_source(cs)))
+    print(render_header(header))
+    if args.hex:  # like lspci -xxxx: the decoded view first, then the raw bytes
+        print()
         print(render_hex(cs.data))
     # Messages about what is missing go to stderr, so stdout stays clean data.
-    if args.json or args.annotate:
-        print("decode --json / --annotate: not built yet (module: render)", file=sys.stderr)
+    if args.annotate:
+        print("decode --annotate: not built yet (module: render)", file=sys.stderr)
         return NOT_YET
-    if not args.hex:
-        print(
-            "decoded view: not built yet (modules: header, caps, pcie_cap, extcaps, aer)",
-            file=sys.stderr,
-        )
-        return NOT_YET
-    return OK
+    print("capability chains: not built yet (modules caps, pcie_cap, extcaps, aer)", file=sys.stderr)
+    return NOT_YET
 
 
 def main(argv: list[str] | None = None) -> int:

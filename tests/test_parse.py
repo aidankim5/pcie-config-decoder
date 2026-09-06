@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from pcicfg.cli import main
+from pcicfg.cli import NOT_YET, main
 from pcicfg.parse import (
     ConfigSpace,
     ParseError,
@@ -303,16 +303,19 @@ def test_lspci_answer_key_is_kept():
 
 # --- command line -------------------------------------------------------------
 
-def test_cli_exit_codes(tmp_path, capsys):
+def test_cli_hex_block_is_lspci_exact(tmp_path, capsys):
     # capsys: pytest captures what the program prints so the test can inspect it.
-    assert main(["decode", str(GPU), "--hex"]) == 0
+    # Exit code is NOT_YET (3) until every decoder module is in; the hex block is final now.
+    assert main(["decode", str(GPU), "--hex"]) == NOT_YET
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("# 01:00.0 VGA compatible controller")
     assert "(lspci text)" in out[1]
-    assert out[2] == "00: de 10 89 24 07 04 10 00 a1 00 00 03 10 00 80 00"
-    assert len(out) == 2 + 256
+    first = out.index("00: de 10 89 24 07 04 10 00 a1 00 00 03 10 00 80 00")
+    assert out[first : first + 256] == _hex_rows(GPU)  # the whole block, byte for byte
+    assert out[first - 1] == ""  # a blank line separates the decoded view from the bytes
 
-    assert main(["decode", str(GPU)]) == 3  # decoded view not built yet
+
+def test_cli_exit_codes(tmp_path, capsys):
     assert main(["list"]) == 3
     assert main(["decode", str(tmp_path), "--hex"]) == 1  # a directory, not a file
     assert main(["decode", str(tmp_path / "missing.txt"), "--hex"]) == 1
