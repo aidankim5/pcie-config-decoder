@@ -56,27 +56,26 @@ FRAME_BY_PATH = {
 ALTERNATIVES = """Ways to get the bytes, best first (verified against Microsoft's docs and
 driver-blocklist, and against each tool's own source):
 
-1. RW-Everything (rweverything.com), the recommended path. It installs a signed
-   driver and keeps Memory Integrity, Secure Boot and signature enforcement on;
-   nothing is test-signed. Two ways to use it:
-     - `pcicfg dump <BDF>` drives its command-line build (Rw.exe) for you, when
-       it is installed and you run the terminal as Administrator.
-     - Or open the GUI, pick the device in PCI view, and use its per-device Save
-       to write a .bin; then `pcicfg decode <file>`. A PCIe device saves the
-       full 4096 bytes.
-
-2. An Ubuntu live USB on the same machine, no install, no Windows changes:
+1. An Ubuntu live USB on the same machine. No install, no Windows changes, and
+   it works whatever this machine's security settings are:
        sudo lspci -vvv -xxxx -s 01:00.0 > rtx3060ti_01-00.0.txt
        sudo cat /sys/bus/pci/devices/0000:01:00.0/config > 01-00.0.config
    The first is what the fixtures in this repo are; the second is the raw
-   4096-byte ECAM frame. Copy either to Windows and decode it there.
+   4096-byte ECAM frame. Copy either to Windows and `pcicfg decode <file>`.
 
-Deliberately not used, and why: enabling Windows kernel-debug mode (bcdedit
-/debug on) lets Microsoft's own signed kldbgdrv.sys read config space, but it
-is a boot-level security change and needs a reboot. Drivers like WinRing0,
-InpOut32 and the ASUS AsIO family can do it too, but they are on Microsoft's
-vulnerable-driver blocklist and are refused while Memory Integrity is on. Test
-signing and a self-signed driver are off the table by design.
+2. RW-Everything (rweverything.com), only on a machine with Memory Integrity
+   off. Its driver RwDrv.sys is on Microsoft's vulnerable-driver blocklist, so
+   with Memory Integrity on it is refused at load and neither its GUI nor its
+   command line reads a byte. Where it does load, save the device from its PCI
+   view and `pcicfg decode <file>`; a PCIe device saves the full 4096 bytes.
+
+Also possible, and why not here: Windows kernel-debug mode (bcdedit /debug on)
+lets Microsoft's own signed kldbgdrv.sys read config space with no third-party
+driver and Memory Integrity left on, but it is a boot-level change that needs a
+reboot. A driver you write yourself and get attestation-signed by Microsoft
+loads with Memory Integrity on, but signing needs a registered organization and
+an EV certificate (money and weeks). Test signing and loading an unsigned or
+blocklisted driver are off the table by design.
 
 For link speed, width, payload sizes and the AER masks with no dump and no
 driver at all, `pcicfg list` reads what Windows already knows (see
@@ -265,85 +264,87 @@ def ecam_region_for(bus: int, segment: int = 0, regions: list[EcamRegion] | None
     return None
 
 
-# --- reading the bytes through RW-Everything's command-line build --------------------------
+# --- can a raw read even happen on this machine? -------------------------------------------
 #
-# RW-Everything (rweverything.com) ships a signed driver, RwDrv.sys, and a command-line
-# program, Rw.exe, that drives it. It is the one route that returns the full 4096-byte ECAM
-# frame while Memory Integrity, Secure Boot and driver-signature enforcement all stay on and
-# nothing is test-signed: a person installs a signed, purpose-built tool and runs it elevated.
-# This is not bringing your own vulnerable driver; it is using RW-Everything for exactly what
-# it is for. If Rw.exe is on the machine, `pcicfg dump` drives it; if not, it says how to get it.
+# RW-Everything (rweverything.com) is the tool people reach for: it reads the full config
+# space through its own kernel driver, RwDrv.sys. Two facts, both verified on this machine,
+# decide whether it can work here at all, and this section checks them so `pcicfg dump` can
+# say precisely what is true rather than guess:
 #
-# Not live-tested here (RW-Everything is not installed on the development machine), so the read
-# fails loudly and falls back to the report rather than ever returning bytes it is unsure of.
+#  1. RwDrv.sys is on Microsoft's vulnerable-driver blocklist (its file rule is in the
+#     enforced policy, FileName="RwDrv.sys"). While Memory Integrity (HVCI) is on, a
+#     blocklisted driver is refused at load. So on a machine with Memory Integrity on,
+#     RW-Everything's driver does not load, and neither its GUI nor its command line can read
+#     a byte. It works only where Memory Integrity is off.
+#  2. RW-Everything's binaries are not Authenticode-signed (the portable Rw.exe and the
+#     installer both read "NotSigned"); the driver is the signed part, and that is the part
+#     the blocklist stops.
+#
+# So this tool does not drive RW-Everything: on a locked-down machine it would fail at the
+# driver load, and this project keeps Memory Integrity on. `pcicfg dump` instead reports the
+# machine's state and the routes that actually fit it. The reliable way to feed the decoder
+# on Windows is `pcicfg decode <file>` on a dump saved where a driver can run (RW-Everything
+# on a machine with Memory Integrity off, or a Linux live USB); the Windows-native, no-driver
+# facts are in `pcicfg list`.
 
 RW_EXE_NAMES = ("Rw.exe", "Rw64.exe")
 RW_SEARCH_DIRS = (
     r"C:\Program Files\RW-Everything",
     r"C:\Program Files (x86)\RW-Everything",
 )
-# One RPCIE32 read per DWORD: RPCIE32 <bus> <dev> <func> <offset> reads a 32-bit value from
-# PCI Express (ECAM) configuration space, so it reaches the whole 4096-byte frame (RW-Everything
-# also has RPCI32 for the legacy CF8/CFC path, which stops at 256 bytes).
-RW_READ_COMMAND = "RPCIE32"
+DRIVER_POLICY = r"C:\Windows\System32\CodeIntegrity\driversipolicy.p7b"
 
 
 def find_rw_everything(extra: str | None = None) -> str | None:
-    """The path to Rw.exe if it is installed or on PATH, else None."""
+    """The path to RW-Everything's Rw.exe if it is installed or on PATH, else None."""
     import shutil
 
-    candidates = []
-    if extra:
-        candidates.append(extra)
+    candidates = list(filter(None, [extra]))
     for d in RW_SEARCH_DIRS:
         candidates += [os.path.join(d, name) for name in RW_EXE_NAMES]
     for path in candidates:
         if os.path.isfile(path):
             return path
-    for name in RW_EXE_NAMES:  # or anywhere on PATH
+    for name in RW_EXE_NAMES:
         found = shutil.which(name)
         if found:
             return found
     return None
 
 
-def parse_rw_dwords(text: str) -> list[int]:
-    """The 32-bit values RW-Everything printed, in order.
+def memory_integrity_enabled() -> bool | None:
+    """Is HVCI / Memory Integrity running? None when it cannot be read (or not Windows).
 
-    Rw.exe prints each read result as '... = 0xXXXXXXXX'. Matching the token
-    after '=' ignores the address/bus/dev/offset it echoes on the same line,
-    which are also hexadecimal. Order is the order the reads were issued.
+    A blocklisted driver such as RwDrv.sys will not load while this is on.
     """
-    import re
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
 
-    return [int(m, 16) for m in re.findall(r"=\s*0x([0-9A-Fa-f]{1,8})", text)]
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                             r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity")
+        value, _ = winreg.QueryValueEx(key, "Enabled")
+        return bool(value)
+    except (OSError, ImportError):
+        return None
 
 
-def read_via_rw_everything(bus: int, device: int, function: int, size: int, rw_path: str) -> bytes:
-    """Read `size` bytes of one Function's configuration space with RW-Everything's Rw.exe.
+def driver_blocklisted(driver_name: str = "RwDrv", policy_path: str = DRIVER_POLICY) -> bool | None:
+    """Is a driver named in the machine's active vulnerable-driver blocklist?
 
-    One RPCIE32 read per DWORD, issued through a single Rw.exe invocation, then
-    assembled little-endian (each DWORD sits in memory low byte first, exactly
-    as the decoder expects). Raises if Rw.exe is missing, fails, or returns the
-    wrong number of values, so a partial or misread dump is never passed on as
-    if it were real.
+    The enforced policy at driversipolicy.p7b names blocked drivers as text
+    inside the signed blob; a substring test is enough to see whether one is
+    listed. None when the policy file cannot be read.
     """
-    import subprocess
-
-    if size % 4:
-        raise ValueError(f"size {size} is not a whole number of DWORDs")
-    commands = ";".join(f"{RW_READ_COMMAND} 0x{bus:X} 0x{device:X} 0x{function:X} 0x{off:X}"
-                        for off in range(0, size, 4))
-    result = subprocess.run(
-        [rw_path, "/Nologo", "/Stdout", f"/Command={commands}"],
-        capture_output=True, timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Rw.exe failed ({result.returncode}): {result.stderr.decode('utf-8', 'replace').strip()}")
-    dwords = parse_rw_dwords(result.stdout.decode("utf-8", "replace"))
-    if len(dwords) != size // 4:
-        raise RuntimeError(f"Rw.exe returned {len(dwords)} values, expected {size // 4}; the command form may differ on this RW-Everything version")
-    return b"".join(d.to_bytes(4, "little") for d in dwords)
+    if sys.platform != "win32":
+        return None
+    try:
+        blob = open(policy_path, "rb").read()
+    except OSError:
+        return None
+    needle = driver_name.lower().encode()
+    return needle in blob.lower() or needle in blob.decode("utf-16-le", "ignore").lower().encode()
 
 
 @dataclass
@@ -354,23 +355,23 @@ class DumpResult:
     reason: str = ""  # why not, when they were not
 
 
-def dump_config_space(bdf: str, size: int = 4096, rw_path: str | None = None) -> DumpResult:
-    """Try to read one Function's configuration space with a signed driver already present.
+def dump_config_space(bdf: str, size: int = 4096) -> DumpResult:
+    """Try to read one Function's configuration space with a driver that works on this machine.
 
-    Today that means RW-Everything's Rw.exe. Elevation is required for the read
-    (the driver's device object is opened by an elevated process); Rw.exe itself
-    will report that if this process is not elevated. Returns the bytes and the
-    method, or None and the reason, so the caller can decode or explain.
+    On a machine with Memory Integrity on there is none: the third-party
+    drivers that read config space (RW-Everything's RwDrv.sys and its kin) are
+    on the vulnerable-driver blocklist and are refused at load, and this
+    project does not turn Memory Integrity off. So this returns None with the
+    exact reason, and `pcicfg dump` prints the routes that do fit. It stays a
+    function, not a hard-coded "no", so a machine where Memory Integrity is off
+    and RW-Everything loads is handled by decoding its saved dump instead.
     """
-    bus, device, function = parse_bdf(bdf)
-    rw = find_rw_everything(rw_path)
-    if rw is None:
-        return DumpResult(None, reason="RW-Everything (Rw.exe) is not installed; it is the signed tool that reads the bytes")
-    try:
-        data = read_via_rw_everything(bus, device, function, size, rw)
-    except (RuntimeError, ValueError, OSError) as e:
-        return DumpResult(None, reason=str(e))
-    return DumpResult(data, method=f"RW-Everything ({rw})")
+    parse_bdf(bdf)  # validate the address; raises ValueError on a bad one
+    if memory_integrity_enabled() and driver_blocklisted("RwDrv"):
+        return DumpResult(None, reason="RwDrv.sys (RW-Everything) is on the active vulnerable-driver blocklist and Memory Integrity is on, so it cannot load here")
+    if find_rw_everything() is None:
+        return DumpResult(None, reason="no driver that can read config space is usable here; see the routes below")
+    return DumpResult(None, reason="RW-Everything is installed; save the device from its GUI and run `pcicfg decode <file>`")
 
 
 def report(status: PawnIoStatus, bdf: str) -> str:
@@ -399,16 +400,25 @@ def report(status: PawnIoStatus, bdf: str) -> str:
     if region is not None:
         addr = region.physical_address(bus, device, function)
         lines.append(f"  ECAM address    physical 0x{addr:X} (from the ACPI MCFG table; reading it needs ring 0)")
+    # The two facts that decide whether any third-party config-space driver can load here.
+    mi = memory_integrity_enabled()
+    blocked = driver_blocklisted("RwDrv")
+    if mi is not None:
+        lines.append(f"  Memory Integrity {'on (HVCI): a blocklisted driver will not load' if mi else 'off: a blocklisted driver could load'}")
+    if blocked is not None:
+        lines.append(f"  RwDrv.sys        {'on the active vulnerable-driver blocklist' if blocked else 'not on the active blocklist'} (RW-Everything)")
     lines += [
         "",
         f"Blocked by: {status.blocker}.",
         "",
         "Why a driver at all: reading configuration space means either port I/O to CF8h/CFCh",
         "(spec 7.2.1, 256 bytes per Function) or mapping the ECAM window in physical memory",
-        "(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a signed driver has to do it.",
-        "PawnIO is signed and loads here, but its release build runs only modules its author",
-        "signed, and none of those reads generic configuration space; a self-signed module needs",
-        "the test-signed build, which this project will not enable.",
+        "(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a driver has to do it. The",
+        "third-party drivers that would (RW-Everything's RwDrv.sys and its kin) are on Microsoft's",
+        "vulnerable-driver blocklist and are refused while Memory Integrity is on; PawnIO loads but",
+        "runs only modules its author signed, none of which reads generic config space. A driver",
+        "you write and get signed, or Microsoft's own debug driver via a reboot, would work; both",
+        "are described below.",
         "",
         ALTERNATIVES,
     ]

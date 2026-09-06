@@ -20,7 +20,7 @@ where it appears.
 |---|---|---|
 | 1. Decoder core | Decodes a 256- or 4096-byte dump from a file. Standard library only, no OS calls. | `pcicfg/*.py` |
 | 2. Windows enumeration, no driver | `pcicfg list`: every PCI function with link speed, width and payload sizes, from the PnP properties Windows already publishes. | `pcicfg/win/enum.py` |
-| 3. Raw reads on Windows | `pcicfg dump <BDF>`: reads and decodes the 4096-byte frame through RW-Everything's signed driver when it is present; otherwise says exactly what it needs. | `pcicfg/win/raw.py` |
+| 3. Raw reads on Windows | `pcicfg dump <BDF>`: locates the bytes and reports exactly why a driver is or is not able to read them on this machine (Memory Integrity, the driver blocklist). | `pcicfg/win/raw.py` |
 
 Layer 1 is the part that matters and it ships. Layers 2 and 3 are about the
 Windows side of the same question: what can you learn about a link without
@@ -257,48 +257,53 @@ read that address; knowing where the bytes are is not reading them, which is the
 whole reason a driver is needed.
 
 The rule for this project is that Memory Integrity and Secure Boot stay on, test
-signing stays off, and no unsigned or blocklisted driver is loaded. Under that
-rule the recommended path is **RW-Everything** (rweverything.com): a signed,
-purpose-built tool with its own signed driver that is not on Microsoft's
-vulnerable-driver blocklist, so it loads with Memory Integrity on. Installing it
-and running it is a person using a tool for its intended purpose, not a program
-smuggling in a driver.
+signing stays off, and no unsigned or blocklisted driver is loaded. That rule
+turns out to disqualify the obvious tool. **RW-Everything** (rweverything.com) is
+what people reach for, and it reads config space through its own kernel driver,
+`RwDrv.sys`. But that driver is on Microsoft's vulnerable-driver blocklist: its
+file rule sits in the enforced policy at
+`C:\Windows\System32\CodeIntegrity\driversipolicy.p7b`, which is active on this
+machine, and Memory Integrity refuses a blocklisted driver at load. So on a
+machine with Memory Integrity on, RW-Everything's driver does not load and
+neither its GUI nor its command line reads a byte. Its downloadable binaries are
+not code-signed either.
 
-`pcicfg dump <BDF>` uses it two ways. If RW-Everything's command-line build
-(`Rw.exe`) is present and the terminal is elevated, the tool drives it, reads the
-full 4096-byte frame with one `RPCIE32` read per DWORD, and decodes the result in
-place, so `pcicfg dump 01:00.0` prints the same decode as `pcicfg decode` on a
-saved file. If it is not present, or the read fails, the tool prints what it
-tried and how to proceed, and exits 3 rather than pretending:
+So `pcicfg dump` does not drive RW-Everything. Instead it checks the two facts
+that decide the outcome and reports them, then exits 3:
 
 ```
-  PawnIOLib.dll   loaded from C:\Program Files\PawnIO\PawnIOLib.dll, driver library version 2.0.0
-  pawnio_open     failed, 0x80070005 (Access is denied)
-  this process    not elevated (run the terminal as Administrator to change this)
-  ECAM address    physical 0xC0100000 (from the ACPI MCFG table; reading it needs ring 0)
+  ECAM address     physical 0xC0100000 (from the ACPI MCFG table; reading it needs ring 0)
+  Memory Integrity on (HVCI): a blocklisted driver will not load
+  RwDrv.sys        on the active vulnerable-driver blocklist (RW-Everything)
 ```
 
-PawnIO deserves a note because it is installed on my machine and it exposes
-exactly the native this needs, `pci_config_read_dword`. It does not work here,
-and the reason is precise: its release driver runs only modules its author
-signed, none of the official modules reads generic config space, and the build
-that would accept a module I signed myself is test-signed. So PawnIO is a dead
-end unless test signing is enabled, which it is not.
+PawnIO is worth a note because it is installed on my machine and exposes exactly
+the native this needs, `pci_config_read_dword`. It does not work here, and the
+reason is precise: its release driver runs only modules its author signed, none
+of the official modules reads generic config space, and the build that would
+accept a module I signed myself is test-signed.
 
-Two other ways to get the same bytes, and why the tool does not automate them:
+What actually works, and what the report points at:
 
-1. RW-Everything's GUI Save, on Windows, writes a per-device `.bin`;
-   `pcicfg decode <file>` reads it. This is the guaranteed manual path.
-2. An Ubuntu live USB and `sudo lspci -vvv -xxxx -s <bdf>` or
-   `sudo cat /sys/bus/pci/devices/0000:<bdf>/config`. This is how the fixtures
-   in this repo were made.
+1. An Ubuntu live USB and `sudo lspci -vvv -xxxx -s <bdf>` or
+   `sudo cat /sys/bus/pci/devices/0000:<bdf>/config`. No Windows changes, works
+   whatever the machine's security settings are. This is how the fixtures in
+   this repo were made, and any saved dump goes straight into `pcicfg decode`.
+2. RW-Everything on a machine with Memory Integrity **off**, where its driver
+   loads: save the device from its PCI view, then `pcicfg decode <file>`.
+3. Windows kernel-debug mode (`bcdedit /debug on`) lets Microsoft's own signed
+   `kldbgdrv.sys` read config space with no third-party driver and Memory
+   Integrity left on, but it is a boot-level change that needs a reboot.
+4. A driver you write yourself, using the documented `IRP_MN_READ_CONFIG` or
+   `BUS_INTERFACE_STANDARD.GetBusData` (Microsoft's own PCIDRV sample makes the
+   call). It loads with Memory Integrity on, but only once Microsoft has
+   attestation-signed it, which needs a registered organization and an EV
+   certificate. The code is a weekend; the signing is money and weeks.
 
-Kernel-debug mode (`bcdedit /debug on`) would let Microsoft's own signed
-`kldbgdrv.sys` read config space with no third-party driver, but it is a
-boot-level security change and needs a reboot, so it is documented here and not
-done automatically. Drivers like WinRing0, InpOut32 and the ASUS AsIO family can
-read config space too, but they are on the vulnerable-driver blocklist and are
-refused while Memory Integrity is on.
+The common thread: every route that returns bytes needs administrator rights
+plus either a driver that is allowed to load or a boot-config change. That is a
+property of the platform's security model, not a gap in the tool, and the tool's
+job is to say exactly where you stand.
 
 And for link speed, width, payload sizes and the AER masks with no dump and no
 driver at all, layer 2 already works: `pcicfg list` reads the

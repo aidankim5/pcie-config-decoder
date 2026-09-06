@@ -5,40 +5,43 @@ What this tool tried, and what it found:
   pawnio_open     failed, 0x80070005 (Access is denied)
   this process    not elevated (run the terminal as Administrator to change this)
   ECAM address    physical 0xC0100000 (from the ACPI MCFG table; reading it needs ring 0)
+  Memory Integrity on (HVCI): a blocklisted driver will not load
+  RwDrv.sys        on the active vulnerable-driver blocklist (RW-Everything)
 
 Blocked by: pawnio_open returned 0x80070005 (Access is denied); this process is not elevated, and the driver's device object needs an elevated one.
 
 Why a driver at all: reading configuration space means either port I/O to CF8h/CFCh
 (spec 7.2.1, 256 bytes per Function) or mapping the ECAM window in physical memory
-(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a signed driver has to do it.
-PawnIO is signed and loads here, but its release build runs only modules its author
-signed, and none of those reads generic configuration space; a self-signed module needs
-the test-signed build, which this project will not enable.
+(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a driver has to do it. The
+third-party drivers that would (RW-Everything's RwDrv.sys and its kin) are on Microsoft's
+vulnerable-driver blocklist and are refused while Memory Integrity is on; PawnIO loads but
+runs only modules its author signed, none of which reads generic config space. A driver
+you write and get signed, or Microsoft's own debug driver via a reboot, would work; both
+are described below.
 
 Ways to get the bytes, best first (verified against Microsoft's docs and
 driver-blocklist, and against each tool's own source):
 
-1. RW-Everything (rweverything.com), the recommended path. It installs a signed
-   driver and keeps Memory Integrity, Secure Boot and signature enforcement on;
-   nothing is test-signed. Two ways to use it:
-     - `pcicfg dump <BDF>` drives its command-line build (Rw.exe) for you, when
-       it is installed and you run the terminal as Administrator.
-     - Or open the GUI, pick the device in PCI view, and use its per-device Save
-       to write a .bin; then `pcicfg decode <file>`. A PCIe device saves the
-       full 4096 bytes.
-
-2. An Ubuntu live USB on the same machine, no install, no Windows changes:
+1. An Ubuntu live USB on the same machine. No install, no Windows changes, and
+   it works whatever this machine's security settings are:
        sudo lspci -vvv -xxxx -s 01:00.0 > rtx3060ti_01-00.0.txt
        sudo cat /sys/bus/pci/devices/0000:01:00.0/config > 01-00.0.config
    The first is what the fixtures in this repo are; the second is the raw
-   4096-byte ECAM frame. Copy either to Windows and decode it there.
+   4096-byte ECAM frame. Copy either to Windows and `pcicfg decode <file>`.
 
-Deliberately not used, and why: enabling Windows kernel-debug mode (bcdedit
-/debug on) lets Microsoft's own signed kldbgdrv.sys read config space, but it
-is a boot-level security change and needs a reboot. Drivers like WinRing0,
-InpOut32 and the ASUS AsIO family can do it too, but they are on Microsoft's
-vulnerable-driver blocklist and are refused while Memory Integrity is on. Test
-signing and a self-signed driver are off the table by design.
+2. RW-Everything (rweverything.com), only on a machine with Memory Integrity
+   off. Its driver RwDrv.sys is on Microsoft's vulnerable-driver blocklist, so
+   with Memory Integrity on it is refused at load and neither its GUI nor its
+   command line reads a byte. Where it does load, save the device from its PCI
+   view and `pcicfg decode <file>`; a PCIe device saves the full 4096 bytes.
+
+Also possible, and why not here: Windows kernel-debug mode (bcdedit /debug on)
+lets Microsoft's own signed kldbgdrv.sys read config space with no third-party
+driver and Memory Integrity left on, but it is a boot-level change that needs a
+reboot. A driver you write yourself and get attestation-signed by Microsoft
+loads with Memory Integrity on, but signing needs a registered organization and
+an EV certificate (money and weeks). Test signing and loading an unsigned or
+blocklisted driver are off the table by design.
 
 For link speed, width, payload sizes and the AER masks with no dump and no
 driver at all, `pcicfg list` reads what Windows already knows (see
