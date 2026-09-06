@@ -189,7 +189,7 @@ def test_render_annotated_marks_starts_and_rebases():
     text = render_annotated(cs, walk_standard_caps(cs))
     lines = text.splitlines()
     assert lines[0].startswith("Annotated PCI-compatible space 00h-FFh")
-    assert "not walked yet (module extcaps not built yet)" in lines[0]  # the GPU dump is 4096 bytes
+    assert "the extended chain (100h-FFFh, spec 7.6) follows below" in lines[0]  # the GPU dump is 4096 bytes
     row60 = lines.index("60: 01 68 03 48 08 00 00 00 05 78 81 00 58 0d e0 fe")
     assert lines[row60 + 1] == "    ^^ 60h: Power Management (ID 01, next 68h) [ahead: decoded by the tool, not yet worked through by hand]"
     # column of byte 8 in the row: 4 characters for "60: " plus 3 per byte x 8 = 28

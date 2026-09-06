@@ -19,12 +19,22 @@ import sys
 from dataclasses import asdict
 
 from .caps import Capability, CapabilityChain, walk_standard_caps
+from .extcaps import ExtendedChain, decode_extended_registers, l1ss_summary, ltr_summary, walk_extended_caps
 from .header import decode_header
 from .msi import decode_msi, decode_msix
 from .parse import ConfigSpace, ParseError, load_config_space
 from .pcie_cap import decode_pcie_capability
 from .pm import decode_power_management
-from .render import render_annotated, render_capabilities, render_chain, render_header, render_hex
+from .render import (
+    render_annotated,
+    render_annotated_extended,
+    render_capabilities,
+    render_chain,
+    render_extended_capabilities,
+    render_extended_chain,
+    render_header,
+    render_hex,
+)
 
 OK, BAD_INPUT, NOT_YET = 0, 1, 3  # 2 is taken by argparse
 
@@ -154,12 +164,51 @@ def chain_as_json(cs: ConfigSpace, chain: CapabilityChain | None) -> dict:
     }
 
 
+def max_link_width_of(cs: ConfigSpace, chain: CapabilityChain | None) -> int | None:
+    """Maximum Link Width from the PCI Express capability, to size the per-lane extended structures."""
+    if chain is None:
+        return None
+    pcie = chain.find(0x10)
+    if pcie is None or pcie.structure_length is None or pcie.span < pcie.structure_length:
+        return None
+    p = decode_pcie_capability(cs, pcie.offset)
+    return p.max_link_width if p.has_link_registers else None
+
+
+def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None) -> dict:
+    if ext is None:
+        return {"present": False, "entries": [], "notes": ["Vendor ID FFFFh: no Function is present; the chain was not walked"]}
+    return {
+        "present": ext.present,
+        "notes": ext.notes,
+        "entries": [
+            {
+                "offset": c.offset,
+                "header": c.header,
+                "id": c.cap_id,
+                "version": c.version,
+                "name": c.name,
+                "next_offset": c.next_offset,
+                "span": c.span,
+                "structure_length": c.structure_length,
+                "taught": c.taught,
+                "problem": c.problem,
+                "summary": ltr_summary(cs, c) or l1ss_summary(cs, c),
+                "registers": [asdict(r) for r in decode_extended_registers(cs, c)],
+                "structure_data": c.structure_data.hex(),
+            }
+            for c in ext.entries
+        ],
+    }
+
+
 def cmd_decode(args: argparse.Namespace) -> int:
     cs = load_config_space(args.file)
     header = decode_header(cs)
     # Vendor ID FFFFh means no Function (7.5.1.1.1): the bytes are all ones, so 34h is not a
     # pointer and the walk is skipped.
     chain = walk_standard_caps(cs) if header.function_present else None
+    ext = walk_extended_caps(cs, max_link_width_of(cs, chain)) if header.function_present else None
 
     if args.json:
         # asdict turns the dataclass (and its nested Bit/Bar lists) into plain dicts and lists,
@@ -168,8 +217,9 @@ def cmd_decode(args: argparse.Namespace) -> int:
         # derived names are added by the render module later.
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
         doc["standard_capabilities"] = chain_as_json(cs, chain)
+        doc["extended_capabilities"] = extended_chain_as_json(cs, ext)
         print(json.dumps(doc, indent=2))
-        print("json: the extended chain is not built yet (modules extcaps, aer)", file=sys.stderr)
+        print("json: AER registers not built yet (module aer)", file=sys.stderr)
         return NOT_YET
 
     print("\n".join(describe_source(cs)))
@@ -180,14 +230,23 @@ def cmd_decode(args: argparse.Namespace) -> int:
         if chain.entries:
             print()
             print(render_capabilities(cs, chain))
-        if args.annotate:
+    if ext is not None:
+        print()
+        print(render_extended_chain(ext))
+        if ext.entries:
             print()
-            print(render_annotated(cs, chain))
+            print(render_extended_capabilities(cs, ext))
+    if args.annotate and chain is not None:
+        print()
+        print(render_annotated(cs, chain))
+        if ext is not None and ext.present:
+            print()
+            print(render_annotated_extended(cs, ext))
     if args.hex:  # like lspci -xxxx: the decoded view first, then the raw bytes
         print()
         print(render_hex(cs.data))
     # Messages about what is missing go to stderr, so stdout stays clean data.
-    print("the extended chain at 100h: not built yet (modules extcaps, aer)", file=sys.stderr)
+    print("AER registers: not built yet (module aer)", file=sys.stderr)
     return NOT_YET
 
 

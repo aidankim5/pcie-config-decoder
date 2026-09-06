@@ -14,6 +14,14 @@ Offsets and pointers print the way the spec writes them, "B4h", uppercase.
 """
 
 from .caps import PCI_COMPATIBLE_END, Capability, CapabilityChain
+from .extcaps import (
+    EXTENDED_END,
+    ExtendedCapability,
+    ExtendedChain,
+    decode_extended_registers,
+    l1ss_summary,
+    ltr_summary,
+)
 from .header import ROM_VALIDATION_STATUS, Bar, Bit, CommonHeader, Type0Header, Type1Header
 from .msi import Msi, MsiX, decode_msi, decode_msix
 from .parse import ConfigSpace
@@ -263,7 +271,7 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
     if end < PCI_COMPATIBLE_END:
         title += "; the dump stops here"
     elif cs.size > PCI_COMPATIBLE_END:
-        title += "; 100h-FFFh (the extended chain, spec 7.6) is in this dump but not walked yet (module extcaps not built yet)"
+        title += "; the extended chain (100h-FFFh, spec 7.6) follows below"
     else:
         title += "; this dump has no extended space"
     lines = [title]
@@ -302,19 +310,16 @@ def is_reserved_field(name: str) -> bool:
     return name.startswith(("RsvdP", "RsvdZ", "Undefined"))
 
 
-def render_register(p: PcieCapability, r: Register) -> list[str]:
+def render_register_lines(base: int, r: Register, collapse_note: str = "") -> list[str]:
     """The register's own line (relative and absolute offset, raw), then one line per field.
 
-    Reserved and undefined fields print only when they are not zero. Slot and
-    Root registers that read zero on a Function that has no slot or is not a
-    Root Port collapse to one line, as do placeholder registers.
+    Reserved and undefined fields print only when they are not zero. With a
+    collapse_note and a raw value of zero the register is one line only.
     """
     digits = r.width // 4  # 4 bits per hex digit
-    head = _rline(p.offset, r.offset, r.name, f"{r.raw:0{digits}x}", f"spec {r.section}")
-    ports_only = r.key.startswith(("slot_", "root_"))
-    if r.raw == 0 and (ports_only or r.key == "device_status_2"):
-        why = "ports with slots / Root Ports only; reads zero on this Function" if ports_only else "placeholder register, RsvdZ"
-        return [head + f"; {why}"]
+    head = _rline(base, r.offset, r.name, f"{r.raw:0{digits}x}", f"spec {r.section}")
+    if collapse_note and r.raw == 0:
+        return [head + f"; {collapse_note}"]
     lines = [head]
     for f in r.fields:
         if is_reserved_field(f.name) and f.value == 0:
@@ -325,6 +330,16 @@ def render_register(p: PcieCapability, r: Register) -> list[str]:
     return lines
 
 
+def render_register(p: PcieCapability, r: Register) -> list[str]:
+    """A PCIe capability register; Slot/Root registers that read zero on a Function without
+    a slot, and the placeholder Device Status 2, collapse to one line."""
+    if r.key.startswith(("slot_", "root_")):
+        return render_register_lines(p.offset, r, "ports with slots / Root Ports only; reads zero on this Function")
+    if r.key == "device_status_2":
+        return render_register_lines(p.offset, r, "placeholder register, RsvdZ")
+    return render_register_lines(p.offset, r)
+
+
 def render_pcie_capability(p: PcieCapability) -> list[str]:
     lines = []
     if p.has_link_registers:
@@ -332,6 +347,97 @@ def render_pcie_capability(p: PcieCapability) -> list[str]:
     for r in p.registers:
         lines += render_register(p, r)
     return lines
+
+
+# --- module 6: the extended chain ------------------------------------------------------
+
+def ext_ahead_tag(c: ExtendedCapability) -> str:
+    return "" if c.taught else "[ahead: decoded by the tool, not yet worked through by hand]"
+
+
+def ext_span_text(c: ExtendedCapability) -> str:
+    if c.end >= EXTENDED_END:
+        return f"{c.span} bytes to 1000h, the end of the ECAM frame"
+    return f"{c.span} bytes to the next start at {c.end:03X}h"
+
+
+def ext_structure_text(c: ExtendedCapability) -> str:
+    if c.structure_length is None:
+        return "structure size: not known to this tool"
+    if c.cap_id == 0x000B:
+        return f"structure {c.structure_length} bytes (VSEC Length, declared)"
+    if c.cap_id in (0x0019, 0x0026, 0x0027):
+        return f"structure {c.structure_length} bytes (from the lane count)"
+    return f"structure {c.structure_length} bytes (spec layout)"
+
+
+def render_extended_chain(chain: ExtendedChain) -> str:
+    """One line per header, in link order: offset, ID, version, name, next, span, structure, tag."""
+    lines = ["Extended capability chain (spec 7.6.1, 7.6.3; starts at 100h, one DWORD header each)  [taught]"]
+    for c in chain.entries:
+        end = "end of list" if c.next_offset == 0 else f"next {c.next_masked:03X}h"
+        lines.append(
+            f"  {c.offset:03X}h  ID {c.cap_id:04x} v{c.version}  {c.name:<44} {end:<12} "
+            f"{ext_span_text(c)}; {ext_structure_text(c)}  {ext_ahead_tag(c)}".rstrip()
+        )
+        if c.problem:
+            lines.append(f"        [problem: {c.problem}]")
+    for note in chain.notes:
+        lines.append(f"  note: {note}")
+    return "\n".join(lines)
+
+
+def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain) -> str:
+    """Every extended capability: header line, decoded registers where this tool has them,
+    otherwise the header and up to 64 bytes of the structure, printed from 00."""
+    lines = []
+    for c in chain.entries:
+        lines.append("")
+        detail = f"ID {c.cap_id:04x} v{c.version}, header {c.header:08x}"
+        if c.structure_length is not None:
+            detail += f", {c.structure_length} bytes"
+        lines.append(f"-- {c.offset:03X}h {c.name} ({detail})  {ext_ahead_tag(c)}".rstrip())
+        if c.problem:
+            lines.append(f"  [problem: {c.problem}]")
+        if c.cap_id == 0x0001:
+            lines.append("  registers: not built yet (module aer)")
+            continue
+        summary = ltr_summary(cs, c) or l1ss_summary(cs, c)
+        if summary:
+            lines.append(f"  summary: {summary}")
+        regs = decode_extended_registers(cs, c)
+        if regs:
+            for r in regs:
+                lines += render_register_lines(c.offset, r)
+        else:
+            shown = c.structure_data[:64]
+            lines.append(f"  header only; first {len(shown)} bytes of the structure, printed from 00 (add {c.offset:03X}h for the absolute offset):")
+            lines.append(render_hex_rebased(shown, c.offset))
+            if len(shown) < len(c.structure_data):
+                lines.append(f"   + {len(c.structure_data) - len(shown)} more bytes not shown (see --hex)")
+    return "\n".join(lines).lstrip("\n")
+
+
+def render_annotated_extended(cs: ConfigSpace, chain: ExtendedChain) -> str:
+    """The teaching view for the extended space: where each header sits, then each capability
+    printed from 00 with the absolute offset on every row."""
+    lines = ["Annotated extended space (100h-FFFh, ECAM frame, spec 7.2.2; headers per spec 7.6.3)"]
+    for c in sorted(chain.entries, key=lambda cap: cap.offset):
+        nxt = "end" if c.next_offset == 0 else f"next {c.next_masked:03X}h"
+        lines.append(f"  {c.offset:03X}h: {c.name} (ID {c.cap_id:04x} v{c.version}, {nxt}) {ext_ahead_tag(c)}".rstrip())
+    for c in sorted(chain.entries, key=lambda cap: cap.offset):
+        block = c.structure_data if c.structure_length is not None else c.data[:64]
+        lines.append("")
+        lines.append(
+            f"== {c.offset:03X}h {c.name}: {ext_structure_text(c)}; {ext_span_text(c)}; "
+            f"printed from 00 (relative offsets; add {c.offset:03X}h for the absolute offset) == {ext_ahead_tag(c)}".rstrip()
+        )
+        lines.append(render_hex_rebased(block, c.offset))
+        if len(block) < c.span:
+            lines.append(f"   + {c.span - len(block)} more bytes up to {c.end:03X}h not shown (see --hex)")
+    for note in chain.notes:
+        lines.append(f"  note: {note}")
+    return "\n".join(lines)
 
 
 # --- module 4: Power Management, MSI, MSI-X ----------------------------------------
