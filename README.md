@@ -391,7 +391,7 @@ py -m pcicfg list
 py -m pytest -q
 ```
 
-162 tests, no dependencies beyond pytest for the tests themselves. Python 3.10
+171 tests, no dependencies beyond pytest for the tests themselves. Python 3.10
 or newer.
 
 ---
