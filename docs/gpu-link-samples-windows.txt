@@ -1,0 +1,10 @@
+# pcicfg list, six samples about 4 seconds apart, taken 2026-09-06 while a display was attached and Windows was idle at the desktop.
+# The link stays at its maximum: the NVIDIA driver keeps it up while it is driving a display.
+# Compare docs/gpu-link-two-states.txt, where the same GPU reads 2.5 GT/s in the Linux dump.
+
+09:53:33  01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+09:53:37  01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+09:53:42  01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+09:53:46  01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+09:53:50  01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512
+09:53:54  01:00.0  10de:2489  0300  NVIDIA GeForce RTX 3060 Ti                   LnkSta 16GT/s x16 (max 16GT/s x16)  MPS 256/256 MRRS 512

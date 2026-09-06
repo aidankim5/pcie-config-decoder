@@ -1,0 +1,3838 @@
+{
+  "source": "tests\\fixtures\\rtx3060ti_01-00.0.txt",
+  "bdf": "01:00.0",
+  "description": "VGA compatible controller: NVIDIA Corporation GA104 [GeForce RTX 3060 Ti Lite Hash Rate] (rev a1) (prog-if 00 [VGA controller])",
+  "size": 4096,
+  "frame": "full ECAM space, 4096 bytes (spec 7.2.2)",
+  "header": {
+    "vendor_id": 4318,
+    "device_id": 9353,
+    "command": 1031,
+    "command_bits": [
+      {
+        "bit": 0,
+        "name": "I/O Space Enable",
+        "set": true,
+        "note": ""
+      },
+      {
+        "bit": 1,
+        "name": "Memory Space Enable",
+        "set": true,
+        "note": ""
+      },
+      {
+        "bit": 2,
+        "name": "Bus Master Enable",
+        "set": true,
+        "note": ""
+      },
+      {
+        "bit": 3,
+        "name": "Special Cycle Enable",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 4,
+        "name": "Memory Write and Invalidate",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 5,
+        "name": "VGA Palette Snoop",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 6,
+        "name": "Parity Error Response",
+        "set": false,
+        "note": ""
+      },
+      {
+        "bit": 7,
+        "name": "IDSEL Stepping/Wait Cycle Control",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 8,
+        "name": "SERR# Enable",
+        "set": false,
+        "note": ""
+      },
+      {
+        "bit": 9,
+        "name": "Fast Back-to-Back Transactions Enable",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 10,
+        "name": "Interrupt Disable",
+        "set": true,
+        "note": ""
+      }
+    ],
+    "status": 16,
+    "status_bits": [
+      {
+        "bit": 0,
+        "name": "Immediate Readiness",
+        "set": false,
+        "note": ""
+      },
+      {
+        "bit": 3,
+        "name": "Interrupt Status",
+        "set": false,
+        "note": ""
+      },
+      {
+        "bit": 4,
+        "name": "Capabilities List",
+        "set": true,
+        "note": "must be 1 on PCI Express"
+      },
+      {
+        "bit": 5,
+        "name": "66 MHz Capable",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 7,
+        "name": "Fast Back-to-Back Transactions Capable",
+        "set": false,
+        "note": "legacy PCI; hardwired 0 on PCI Express"
+      },
+      {
+        "bit": 8,
+        "name": "Master Data Parity Error",
+        "set": false,
+        "note": "RW1C: written 1 to clear"
+      },
+      {
+        "bit": 11,
+        "name": "Signaled Target Abort",
+        "set": false,
+        "note": "RW1C"
+      },
+      {
+        "bit": 12,
+        "name": "Received Target Abort",
+        "set": false,
+        "note": "RW1C"
+      },
+      {
+        "bit": 13,
+        "name": "Received Master Abort",
+        "set": false,
+        "note": "RW1C"
+      },
+      {
+        "bit": 14,
+        "name": "Signaled System Error",
+        "set": false,
+        "note": "RW1C"
+      },
+      {
+        "bit": 15,
+        "name": "Detected Parity Error",
+        "set": false,
+        "note": "RW1C"
+      }
+    ],
+    "devsel_timing": 0,
+    "revision_id": 161,
+    "prog_if": 0,
+    "sub_class": 0,
+    "base_class": 3,
+    "cache_line_size": 16,
+    "latency_timer": 0,
+    "header_type": 128,
+    "header_layout": 0,
+    "multi_function": true,
+    "bist": 0,
+    "capabilities_pointer_raw": 96,
+    "capabilities_pointer": 96,
+    "interrupt_line": 255,
+    "interrupt_pin": 1,
+    "bars": [
+      {
+        "index": 0,
+        "offset": 16,
+        "raw": 2214592512,
+        "kind": "memory",
+        "address": 2214592512,
+        "width": 32,
+        "prefetchable": false,
+        "upper_raw": null,
+        "size_note": "size: not determinable from a dump (needs the write-all-ones probe)",
+        "problem": ""
+      },
+      {
+        "index": 1,
+        "offset": 20,
+        "raw": 12,
+        "kind": "memory",
+        "address": 274877906944,
+        "width": 64,
+        "prefetchable": true,
+        "upper_raw": 64,
+        "size_note": "size: not determinable from a dump (needs the write-all-ones probe)",
+        "problem": ""
+      },
+      {
+        "index": 3,
+        "offset": 28,
+        "raw": 12,
+        "kind": "memory",
+        "address": 283467841536,
+        "width": 64,
+        "prefetchable": true,
+        "upper_raw": 66,
+        "size_note": "size: not determinable from a dump (needs the write-all-ones probe)",
+        "problem": ""
+      },
+      {
+        "index": 5,
+        "offset": 36,
+        "raw": 16385,
+        "kind": "io",
+        "address": 16384,
+        "width": 32,
+        "prefetchable": false,
+        "upper_raw": null,
+        "size_note": "size: not determinable from a dump (needs the write-all-ones probe)",
+        "problem": ""
+      }
+    ],
+    "cardbus_cis": 0,
+    "subsystem_vendor_id": 5208,
+    "subsystem_id": 16503,
+    "expansion_rom": 2231369728,
+    "min_gnt": 0,
+    "max_lat": 0
+  },
+  "standard_capabilities": {
+    "pointer_raw": 96,
+    "pointer": 96,
+    "has_list": true,
+    "notes": [],
+    "entries": [
+      {
+        "offset": 96,
+        "id": 1,
+        "name": "Power Management",
+        "next_pointer": 104,
+        "span": 8,
+        "structure_length": 8,
+        "taught": false,
+        "problem": "",
+        "span_data": "0168034808000000",
+        "structure_data": "0168034808000000",
+        "decoded": {
+          "offset": 96,
+          "pmc": 18435,
+          "version": 3,
+          "pme_clock": false,
+          "immediate_readiness": false,
+          "dsi": false,
+          "aux_current_code": 0,
+          "d1_support": false,
+          "d2_support": false,
+          "pme_support": 9,
+          "pmcsr": 8,
+          "power_state": 0,
+          "no_soft_reset": true,
+          "pme_enable": false,
+          "data_select": 0,
+          "data_scale": 0,
+          "pme_status": false,
+          "reserved_byte": 0,
+          "data": 0,
+          "power_state_name": "D0",
+          "pme_states": [
+            "D0",
+            "D3hot"
+          ],
+          "aux_current_ma": 0
+        }
+      },
+      {
+        "offset": 104,
+        "id": 5,
+        "name": "MSI",
+        "next_pointer": 120,
+        "span": 16,
+        "structure_length": 16,
+        "taught": true,
+        "problem": "",
+        "span_data": "05788100580de0fe0000000000000000",
+        "structure_data": "05788100580de0fe0000000000000000",
+        "decoded": {
+          "offset": 104,
+          "message_control": 129,
+          "enable": true,
+          "multiple_message_capable": 0,
+          "multiple_message_enable": 0,
+          "address_64bit": true,
+          "per_vector_masking": false,
+          "extended_data_capable": false,
+          "extended_data_enable": false,
+          "message_address": 4276096344,
+          "message_upper_address": 0,
+          "data_offset": 12,
+          "message_data": 0,
+          "extended_message_data": 0,
+          "mask_bits": null,
+          "pending_bits": null,
+          "vectors_capable": 1,
+          "vectors_enabled": 1,
+          "full_address": 4276096344,
+          "structure_length": 16,
+          "problem": ""
+        }
+      },
+      {
+        "offset": 120,
+        "id": 16,
+        "name": "PCI Express",
+        "next_pointer": 180,
+        "span": 60,
+        "structure_length": 60,
+        "taught": true,
+        "problem": "",
+        "span_data": "10b41200e18d2c113f290000043d4500400101110000000000000000000000000000000013000700000000001e00800104001e000000000000000000",
+        "structure_data": "10b41200e18d2c113f290000043d4500400101110000000000000000000000000000000013000700000000001e00800104001e000000000000000000",
+        "decoded": {
+          "offset": 120,
+          "version": 2,
+          "device_port_type": 1,
+          "device_port_type_name": "Legacy PCI Express Endpoint",
+          "structure_length": 60,
+          "problem": null,
+          "link_summary": "Speed 2.5 GT/s (downgraded), Width x16",
+          "speed_downgraded": true,
+          "width_downgraded": false,
+          "speed_tag": "downgraded",
+          "width_tag": "",
+          "current_link_speed_code": 1,
+          "max_link_speed_code": 4,
+          "negotiated_link_width": 16,
+          "max_link_width": 16,
+          "max_payload_supported_bytes": 256,
+          "max_payload_bytes": 256,
+          "max_read_request_bytes": 512,
+          "slot_power_limit_watts": 75.0,
+          "supported_speeds_gts": [
+            2.5,
+            5.0,
+            8.0,
+            16.0
+          ],
+          "registers": [
+            {
+              "key": "pcie_capabilities",
+              "name": "PCI Express Capabilities",
+              "section": "7.5.3.2",
+              "offset": 2,
+              "width": 16,
+              "raw": 18,
+              "fields": [
+                {
+                  "hi": 3,
+                  "lo": 0,
+                  "name": "Capability Version",
+                  "value": 2,
+                  "text": "2",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 4,
+                  "name": "Device/Port Type",
+                  "value": 1,
+                  "text": "Legacy PCI Express Endpoint",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "Slot Implemented",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 13,
+                  "lo": 9,
+                  "name": "Interrupt Message Number",
+                  "value": 0,
+                  "text": "0",
+                  "note": "MSI/MSI-X vector for this capability's status bits"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Undefined (was TCS Routing)",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "device_capabilities",
+              "name": "Device Capabilities",
+              "section": "7.5.3.3",
+              "offset": 4,
+              "width": 32,
+              "raw": 288132577,
+              "fields": [
+                {
+                  "hi": 2,
+                  "lo": 0,
+                  "name": "Max_Payload_Size Supported",
+                  "value": 1,
+                  "text": "256 bytes",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 3,
+                  "name": "Phantom Functions Supported",
+                  "value": 0,
+                  "text": "none",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Extended Tag Field Supported",
+                  "value": 1,
+                  "text": "8-bit Tag",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 6,
+                  "name": "Endpoint L0s Acceptable Latency",
+                  "value": 7,
+                  "text": "no limit",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 9,
+                  "name": "Endpoint L1 Acceptable Latency",
+                  "value": 6,
+                  "text": "max 64 us",
+                  "note": ""
+                },
+                {
+                  "hi": 14,
+                  "lo": 12,
+                  "name": "Undefined (legacy Attention Button / Indicators)",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Role-Based Error Reporting",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 16,
+                  "lo": 16,
+                  "name": "ERR_COR Subclass Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 25,
+                  "lo": 18,
+                  "name": "Captured Slot Power Limit Value",
+                  "value": 75,
+                  "text": "75",
+                  "note": "Upstream Ports only; Watts = value x scale; F0h-F2h at scale 0 = 250/275/300 W (7.5.3.9)"
+                },
+                {
+                  "hi": 27,
+                  "lo": 26,
+                  "name": "Captured Slot Power Limit Scale",
+                  "value": 0,
+                  "text": "1.0x",
+                  "note": ""
+                },
+                {
+                  "hi": 28,
+                  "lo": 28,
+                  "name": "Function Level Reset Capability",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 29,
+                  "name": "RsvdP (bit 30 is TEE-IO Supported in later revisions)",
+                  "value": 0,
+                  "text": "0",
+                  "note": "pci_regs.h PCI_EXP_DEVCAP_TEE; not in the 5.0 spec"
+                }
+              ]
+            },
+            {
+              "key": "device_control",
+              "name": "Device Control",
+              "section": "7.5.3.4",
+              "offset": 8,
+              "width": 16,
+              "raw": 10559,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Correctable Error Reporting Enable",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "Non-Fatal Error Reporting Enable",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "Fatal Error Reporting Enable",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Unsupported Request Reporting Enable",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Enable Relaxed Ordering",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 5,
+                  "name": "Max_Payload_Size",
+                  "value": 1,
+                  "text": "256 bytes",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "Extended Tag Field Enable",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 9,
+                  "name": "Phantom Functions Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "Aux Power PM Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RWS, sticky"
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "Enable No Snoop",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 14,
+                  "lo": 12,
+                  "name": "Max_Read_Request_Size",
+                  "value": 2,
+                  "text": "512 bytes",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Initiate FLR / Bridge Config Retry Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Endpoints with FLR: Initiate FLR (write 1, reads 0); PCIe-to-PCI/PCI-X Bridges: Bridge Configuration Retry Enable (RW); others RsvdP"
+                }
+              ]
+            },
+            {
+              "key": "device_status",
+              "name": "Device Status",
+              "section": "7.5.3.5",
+              "offset": 10,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Correctable Error Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "Non-Fatal Error Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "Fatal Error Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Unsupported Request Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "AUX Power Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Transactions Pending",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Emergency Power Reduction Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 15,
+                  "lo": 7,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "link_capabilities",
+              "name": "Link Capabilities",
+              "section": "7.5.3.6",
+              "offset": 12,
+              "width": 32,
+              "raw": 4537604,
+              "fields": [
+                {
+                  "hi": 3,
+                  "lo": 0,
+                  "name": "Max Link Speed",
+                  "value": 4,
+                  "text": "16 GT/s",
+                  "note": "index into the Supported Link Speeds Vector"
+                },
+                {
+                  "hi": 9,
+                  "lo": 4,
+                  "name": "Maximum Link Width",
+                  "value": 16,
+                  "text": "x16",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 10,
+                  "name": "ASPM Support",
+                  "value": 3,
+                  "text": "L0s and L1",
+                  "note": ""
+                },
+                {
+                  "hi": 14,
+                  "lo": 12,
+                  "name": "L0s Exit Latency",
+                  "value": 3,
+                  "text": "256 ns to < 512 ns",
+                  "note": "undefined when L0s is unsupported"
+                },
+                {
+                  "hi": 17,
+                  "lo": 15,
+                  "name": "L1 Exit Latency",
+                  "value": 2,
+                  "text": "2 us to < 4 us",
+                  "note": "undefined when ASPM L1 is unsupported"
+                },
+                {
+                  "hi": 18,
+                  "lo": 18,
+                  "name": "Clock Power Management",
+                  "value": 1,
+                  "text": "+",
+                  "note": "Upstream Ports: tolerates CLKREQ# clock removal in L1 and L2/L3 Ready"
+                },
+                {
+                  "hi": 19,
+                  "lo": 19,
+                  "name": "Surprise Down Error Reporting Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 20,
+                  "lo": 20,
+                  "name": "Data Link Layer Link Active Reporting Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 21,
+                  "lo": 21,
+                  "name": "Link Bandwidth Notification Capability",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Root Ports and Switch Downstream Ports"
+                },
+                {
+                  "hi": 22,
+                  "lo": 22,
+                  "name": "ASPM Optionality Compliance",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 23,
+                  "lo": 23,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 24,
+                  "name": "Port Number",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "link_control",
+              "name": "Link Control",
+              "section": "7.5.3.7",
+              "offset": 16,
+              "width": 16,
+              "raw": 320,
+              "fields": [
+                {
+                  "hi": 1,
+                  "lo": 0,
+                  "name": "ASPM Control",
+                  "value": 0,
+                  "text": "disabled",
+                  "note": ""
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Read Completion Boundary (RCB)",
+                  "value": 0,
+                  "text": "64 bytes",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Link Disable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Retrain Link",
+                  "value": 0,
+                  "text": "-",
+                  "note": "reads 0; Downstream Ports only"
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Common Clock Configuration",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "Extended Synch",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "Enable Clock Power Management",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 9,
+                  "name": "Hardware Autonomous Width Disable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "Link Bandwidth Management Interrupt Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "Link Autonomous Bandwidth Interrupt Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 13,
+                  "lo": 12,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 14,
+                  "name": "DRS Signaling Control",
+                  "value": 0,
+                  "text": "DRS not reported",
+                  "note": "Downstream Ports only"
+                }
+              ]
+            },
+            {
+              "key": "link_status",
+              "name": "Link Status",
+              "section": "7.5.3.8",
+              "offset": 18,
+              "width": 16,
+              "raw": 4353,
+              "fields": [
+                {
+                  "hi": 3,
+                  "lo": 0,
+                  "name": "Current Link Speed",
+                  "value": 1,
+                  "text": "2.5 GT/s",
+                  "note": "index into the Supported Link Speeds Vector"
+                },
+                {
+                  "hi": 9,
+                  "lo": 4,
+                  "name": "Negotiated Link Width",
+                  "value": 16,
+                  "text": "x16",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "Undefined (was Link Training Error)",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "Link Training",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Slot Clock Configuration",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Data Link Layer Link Active",
+                  "value": 0,
+                  "text": "-",
+                  "note": "valid only if Link Capabilities bit 20"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Link Bandwidth Management Status",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C; Downstream Ports only"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Link Autonomous Bandwidth Status",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C; Downstream Ports only"
+                }
+              ]
+            },
+            {
+              "key": "slot_capabilities",
+              "name": "Slot Capabilities",
+              "section": "7.5.3.9",
+              "offset": 20,
+              "width": 32,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Attention Button Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "Power Controller Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "MRL Sensor Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Attention Indicator Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Power Indicator Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Hot-Plug Surprise",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Hot-Plug Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 14,
+                  "lo": 7,
+                  "name": "Slot Power Limit Value",
+                  "value": 0,
+                  "text": "0",
+                  "note": "Watts = value x scale; F0h-F2h = 250/275/300 W"
+                },
+                {
+                  "hi": 16,
+                  "lo": 15,
+                  "name": "Slot Power Limit Scale",
+                  "value": 0,
+                  "text": "1.0x",
+                  "note": ""
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "Electromechanical Interlock Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 18,
+                  "lo": 18,
+                  "name": "No Command Completed Support",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 19,
+                  "name": "Physical Slot Number",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "slot_control",
+              "name": "Slot Control",
+              "section": "7.5.3.10",
+              "offset": 24,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Attention Button Pressed Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "Power Fault Detected Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "MRL Sensor Changed Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Presence Detect Changed Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Command Completed Interrupt Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Hot-Plug Interrupt Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 6,
+                  "name": "Attention Indicator Control",
+                  "value": 0,
+                  "text": "reserved",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 8,
+                  "name": "Power Indicator Control",
+                  "value": 0,
+                  "text": "reserved",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "Power Controller Control",
+                  "value": 0,
+                  "text": "power on",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "Electromechanical Interlock Control",
+                  "value": 0,
+                  "text": "-",
+                  "note": "write 1 toggles; reads 0"
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Data Link Layer State Changed Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Auto Slot Power Limit Disable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "In-Band PD Disable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "slot_status",
+              "name": "Slot Status",
+              "section": "7.5.3.11",
+              "offset": 26,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Attention Button Pressed",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "Power Fault Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "MRL Sensor Changed",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Presence Detect Changed",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Command Completed",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "MRL Sensor State",
+                  "value": 0,
+                  "text": "closed",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Presence Detect State",
+                  "value": 0,
+                  "text": "adapter not present",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "Electromechanical Interlock Status",
+                  "value": 0,
+                  "text": "disengaged",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "Data Link Layer State Changed",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 15,
+                  "lo": 9,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "root_control",
+              "name": "Root Control",
+              "section": "7.5.3.12",
+              "offset": 28,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "System Error on Correctable Error Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "System Error on Non-Fatal Error Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "System Error on Fatal Error Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "PME Interrupt Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "CRS Software Visibility Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 5,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "root_capabilities",
+              "name": "Root Capabilities",
+              "section": "7.5.3.13",
+              "offset": 30,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "CRS Software Visibility",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 1,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "root_status",
+              "name": "Root Status",
+              "section": "7.5.3.14",
+              "offset": 32,
+              "width": 32,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 15,
+                  "lo": 0,
+                  "name": "PME Requester ID",
+                  "value": 0,
+                  "text": "0000h",
+                  "note": "valid while PME Status is set"
+                },
+                {
+                  "hi": 16,
+                  "lo": 16,
+                  "name": "PME Status",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "PME Pending",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 18,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "device_capabilities_2",
+              "name": "Device Capabilities 2",
+              "section": "7.5.3.15",
+              "offset": 36,
+              "width": 32,
+              "raw": 458771,
+              "fields": [
+                {
+                  "hi": 3,
+                  "lo": 0,
+                  "name": "Completion Timeout Ranges Supported",
+                  "value": 3,
+                  "text": "A and B",
+                  "note": "A 50us-10ms, B 10ms-250ms, C 250ms-4s, D 4s-64s"
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Completion Timeout Disable Supported",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "ARI Forwarding Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "AtomicOp Routing Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Ports only"
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "32-bit AtomicOp Completer Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "64-bit AtomicOp Completer Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 9,
+                  "name": "128-bit CAS Completer Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "No RO-enabled PR-PR Passing",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "LTR Mechanism Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 13,
+                  "lo": 12,
+                  "name": "TPH Completer Supported",
+                  "value": 0,
+                  "text": "not supported",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 14,
+                  "name": "LN System CLS",
+                  "value": 0,
+                  "text": "not supported or not in effect",
+                  "note": "Root Ports only"
+                },
+                {
+                  "hi": 16,
+                  "lo": 16,
+                  "name": "10-Bit Tag Completer Supported",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "10-Bit Tag Requester Supported",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 19,
+                  "lo": 18,
+                  "name": "OBFF Supported",
+                  "value": 1,
+                  "text": "Message signaling",
+                  "note": ""
+                },
+                {
+                  "hi": 20,
+                  "lo": 20,
+                  "name": "Extended Fmt Field Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 21,
+                  "lo": 21,
+                  "name": "End-End TLP Prefix Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 23,
+                  "lo": 22,
+                  "name": "Max End-End TLP Prefixes",
+                  "value": 0,
+                  "text": "4",
+                  "note": "meaningful only if End-End TLP Prefix Supported"
+                },
+                {
+                  "hi": 25,
+                  "lo": 24,
+                  "name": "Emergency Power Reduction Supported",
+                  "value": 0,
+                  "text": "not supported",
+                  "note": ""
+                },
+                {
+                  "hi": 26,
+                  "lo": 26,
+                  "name": "Emergency Power Reduction Initialization Required",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 30,
+                  "lo": 27,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 31,
+                  "name": "FRS Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "device_control_2",
+              "name": "Device Control 2",
+              "section": "7.5.3.16",
+              "offset": 40,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 3,
+                  "lo": 0,
+                  "name": "Completion Timeout Value",
+                  "value": 0,
+                  "text": "50 us to 50 ms (default)",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Completion Timeout Disable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "ARI Forwarding Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Downstream Ports only"
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "AtomicOp Requester Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "AtomicOp Egress Blocking",
+                  "value": 0,
+                  "text": "-",
+                  "note": "Ports only"
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "IDO Request Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 9,
+                  "name": "IDO Completion Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "LTR Mechanism Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "Emergency Power Reduction Request",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "10-Bit Tag Requester Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 14,
+                  "lo": 13,
+                  "name": "OBFF Enable",
+                  "value": 0,
+                  "text": "disabled",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "End-End TLP Prefix Blocking",
+                  "value": 0,
+                  "text": "forwarding enabled",
+                  "note": "Ports only"
+                }
+              ]
+            },
+            {
+              "key": "device_status_2",
+              "name": "Device Status 2",
+              "section": "7.5.3.17",
+              "offset": 42,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 15,
+                  "lo": 0,
+                  "name": "RsvdZ (placeholder register)",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "link_capabilities_2",
+              "name": "Link Capabilities 2",
+              "section": "7.5.3.18",
+              "offset": 44,
+              "width": 32,
+              "raw": 25165854,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 1,
+                  "name": "Supported Link Speeds Vector",
+                  "value": 15,
+                  "text": "2.5, 5, 8, 16 GT/s",
+                  "note": "bit 0 = 2.5 GT/s ... bit 4 = 32 GT/s"
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "Crosslink Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 9,
+                  "name": "Lower SKP OS Generation Supported Speeds Vector",
+                  "value": 0,
+                  "text": "none",
+                  "note": ""
+                },
+                {
+                  "hi": 22,
+                  "lo": 16,
+                  "name": "Lower SKP OS Reception Supported Speeds Vector",
+                  "value": 0,
+                  "text": "none",
+                  "note": ""
+                },
+                {
+                  "hi": 23,
+                  "lo": 23,
+                  "name": "Retimer Presence Detect Supported",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 24,
+                  "lo": 24,
+                  "name": "Two Retimers Presence Detect Supported",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 30,
+                  "lo": 25,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 31,
+                  "name": "DRS Supported",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "link_control_2",
+              "name": "Link Control 2",
+              "section": "7.5.3.19",
+              "offset": 48,
+              "width": 16,
+              "raw": 4,
+              "fields": [
+                {
+                  "hi": 3,
+                  "lo": 0,
+                  "name": "Target Link Speed",
+                  "value": 4,
+                  "text": "16 GT/s",
+                  "note": "index into the Supported Link Speeds Vector"
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Enter Compliance",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Hardware Autonomous Speed Disable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Selectable De-emphasis",
+                  "value": 0,
+                  "text": "-6 dB",
+                  "note": "5.0 GT/s only"
+                },
+                {
+                  "hi": 9,
+                  "lo": 7,
+                  "name": "Transmit Margin",
+                  "value": 0,
+                  "text": "normal operating range",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "Enter Modified Compliance",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "Compliance SOS",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 15,
+                  "lo": 12,
+                  "name": "Compliance Preset/De-emphasis",
+                  "value": 0,
+                  "text": "-6 dB at 5.0 GT/s / preset P0 at 8.0 GT/s and up (Table 4-3: 0 dB preshoot, -6 dB de-emphasis)",
+                  "note": "Table 4-3 in 4.2.3.2 names the presets"
+                }
+              ]
+            },
+            {
+              "key": "link_status_2",
+              "name": "Link Status 2",
+              "section": "7.5.3.20",
+              "offset": 50,
+              "width": 16,
+              "raw": 30,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Current De-emphasis Level",
+                  "value": 0,
+                  "text": "-6 dB",
+                  "note": "5.0 GT/s only"
+                },
+                {
+                  "hi": 1,
+                  "lo": 1,
+                  "name": "Equalization 8.0 GT/s Complete",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 2,
+                  "lo": 2,
+                  "name": "Equalization 8.0 GT/s Phase 1 Successful",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 3,
+                  "name": "Equalization 8.0 GT/s Phase 2 Successful",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Equalization 8.0 GT/s Phase 3 Successful",
+                  "value": 1,
+                  "text": "+",
+                  "note": ""
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Link Equalization Request 8.0 GT/s",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Retimer Presence Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "Two Retimers Presence Detected",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 8,
+                  "name": "Crosslink Resolution",
+                  "value": 0,
+                  "text": "unsupported",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 10,
+                  "name": "RsvdZ (bit 10 is Flit Mode Status in PCIe 6.0)",
+                  "value": 0,
+                  "text": "0",
+                  "note": "pci_regs.h PCI_EXP_LNKSTA2_FLIT; not in the 5.0 spec"
+                },
+                {
+                  "hi": 14,
+                  "lo": 12,
+                  "name": "Downstream Component Presence",
+                  "value": 0,
+                  "text": "Link Down, presence not determined",
+                  "note": "Downstream Ports with DRS only"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "DRS Message Received",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1C"
+                }
+              ]
+            },
+            {
+              "key": "slot_capabilities_2",
+              "name": "Slot Capabilities 2",
+              "section": "7.5.3.21",
+              "offset": 52,
+              "width": 32,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 31,
+                  "lo": 0,
+                  "name": "raw (not decoded: ports with slots only)",
+                  "value": 0,
+                  "text": "00000000h",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "slot_control_2",
+              "name": "Slot Control 2",
+              "section": "7.5.3.22",
+              "offset": 56,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 15,
+                  "lo": 0,
+                  "name": "raw (not decoded: ports with slots only)",
+                  "value": 0,
+                  "text": "0000h",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "slot_status_2",
+              "name": "Slot Status 2",
+              "section": "7.5.3.23",
+              "offset": 58,
+              "width": 16,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 15,
+                  "lo": 0,
+                  "name": "raw (not decoded: ports with slots only)",
+                  "value": 0,
+                  "text": "0000h",
+                  "note": ""
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "offset": 180,
+        "id": 9,
+        "name": "Vendor Specific",
+        "next_pointer": 0,
+        "span": 76,
+        "structure_length": 20,
+        "taught": false,
+        "problem": "",
+        "span_data": "0900140100000000000000000000000000000000110005000000b9000000ba000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "structure_data": "0900140100000000000000000000000000000000",
+        "decoded": null
+      }
+    ]
+  },
+  "extended_capabilities": {
+    "present": true,
+    "notes": [],
+    "entries": [
+      {
+        "offset": 256,
+        "header": 629211138,
+        "id": 2,
+        "version": 1,
+        "name": "Virtual Channel",
+        "next_offset": 600,
+        "span": 40,
+        "structure_length": null,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [],
+        "aer": null,
+        "structure_data": "0200812500000000000000000000000000000000ff00008000000000000000000000000000000000"
+      },
+      {
+        "offset": 600,
+        "header": 310444062,
+        "id": 30,
+        "version": 1,
+        "name": "L1 PM Substates",
+        "next_offset": 296,
+        "span": 456,
+        "structure_length": 16,
+        "taught": false,
+        "problem": "",
+        "summary": "supported: PCI-PM L1.2+ L1.1+ ASPM L1.2+ L1.1+; Port Common_Mode_Restore_Time 255 us; Port T_POWER_ON 10 us; enabled: PCI-PM L1.2- L1.1- ASPM L1.2- L1.1-; Common_Mode_Restore_Time 0 us; LTR_L1.2_THRESHOLD 281600 ns; T_POWER_ON 10 us",
+        "registers": [
+          {
+            "key": "capabilities",
+            "name": "L1 PM Substates Capabilities",
+            "section": "7.8.3.2",
+            "offset": 4,
+            "width": 32,
+            "raw": 2686751,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "PCI-PM L1.2 Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 1,
+                "lo": 1,
+                "name": "PCI-PM L1.1 Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 2,
+                "lo": 2,
+                "name": "ASPM L1.2 Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 3,
+                "lo": 3,
+                "name": "ASPM L1.1 Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 4,
+                "lo": 4,
+                "name": "L1 PM Substates Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 5,
+                "lo": 5,
+                "name": "Link Activation Supported",
+                "value": 0,
+                "text": "-",
+                "note": "Downstream Ports only"
+              },
+              {
+                "hi": 7,
+                "lo": 6,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 15,
+                "lo": 8,
+                "name": "Port Common_Mode_Restore_Time",
+                "value": 255,
+                "text": "255 us",
+                "note": ""
+              },
+              {
+                "hi": 17,
+                "lo": 16,
+                "name": "Port T_POWER_ON Scale",
+                "value": 0,
+                "text": "2 us",
+                "note": ""
+              },
+              {
+                "hi": 18,
+                "lo": 18,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 23,
+                "lo": 19,
+                "name": "Port T_POWER_ON Value",
+                "value": 5,
+                "text": "5",
+                "note": "T_POWER_ON = Value x Scale"
+              },
+              {
+                "hi": 31,
+                "lo": 24,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "control_1",
+            "name": "L1 PM Substates Control 1",
+            "section": "7.8.3.3",
+            "offset": 8,
+            "width": 32,
+            "raw": 1091764224,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "PCI-PM L1.2 Enable",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 1,
+                "lo": 1,
+                "name": "PCI-PM L1.1 Enable",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 2,
+                "lo": 2,
+                "name": "ASPM L1.2 Enable",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 3,
+                "lo": 3,
+                "name": "ASPM L1.1 Enable",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 4,
+                "lo": 4,
+                "name": "Link Activation Interrupt Enable",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 5,
+                "lo": 5,
+                "name": "Link Activation Control",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 7,
+                "lo": 6,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 15,
+                "lo": 8,
+                "name": "Common_Mode_Restore_Time",
+                "value": 0,
+                "text": "0 us",
+                "note": ""
+              },
+              {
+                "hi": 25,
+                "lo": 16,
+                "name": "LTR_L1.2_THRESHOLD_Value",
+                "value": 275,
+                "text": "275",
+                "note": ""
+              },
+              {
+                "hi": 28,
+                "lo": 26,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 31,
+                "lo": 29,
+                "name": "LTR_L1.2_THRESHOLD_Scale",
+                "value": 2,
+                "text": "x 1,024 ns",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "control_2",
+            "name": "L1 PM Substates Control 2",
+            "section": "7.8.3.4",
+            "offset": 12,
+            "width": 32,
+            "raw": 40,
+            "fields": [
+              {
+                "hi": 1,
+                "lo": 0,
+                "name": "T_POWER_ON Scale",
+                "value": 0,
+                "text": "2 us",
+                "note": ""
+              },
+              {
+                "hi": 2,
+                "lo": 2,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 7,
+                "lo": 3,
+                "name": "T_POWER_ON Value",
+                "value": 5,
+                "text": "5",
+                "note": "T_POWER_ON = Value x Scale"
+              },
+              {
+                "hi": 31,
+                "lo": 8,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "1e0081121fff28000000134128000000"
+      },
+      {
+        "offset": 296,
+        "header": 1107361796,
+        "id": 4,
+        "version": 1,
+        "name": "Power Budgeting",
+        "next_offset": 1056,
+        "span": 304,
+        "structure_length": 16,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [
+          {
+            "key": "data_select",
+            "name": "Power Budgeting Data Select",
+            "section": "7.8.1.2",
+            "offset": 4,
+            "width": 8,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 7,
+                "lo": 0,
+                "name": "Data Select",
+                "value": 0,
+                "text": "0",
+                "note": "which operating condition the Data register shows"
+              }
+            ]
+          },
+          {
+            "key": "data",
+            "name": "Power Budgeting Data",
+            "section": "7.8.1.3",
+            "offset": 8,
+            "width": 32,
+            "raw": 491809,
+            "fields": [
+              {
+                "hi": 7,
+                "lo": 0,
+                "name": "Base Power",
+                "value": 33,
+                "text": "33",
+                "note": "Watts = Base Power x Data Scale, except the F0h-F2h codes at scale 1.0x"
+              },
+              {
+                "hi": 9,
+                "lo": 8,
+                "name": "Data Scale",
+                "value": 1,
+                "text": "0.1x",
+                "note": ""
+              },
+              {
+                "hi": 12,
+                "lo": 10,
+                "name": "PM Sub State",
+                "value": 0,
+                "text": "default",
+                "note": ""
+              },
+              {
+                "hi": 14,
+                "lo": 13,
+                "name": "PM State",
+                "value": 0,
+                "text": "D0",
+                "note": ""
+              },
+              {
+                "hi": 17,
+                "lo": 15,
+                "name": "Type",
+                "value": 7,
+                "text": "Maximum",
+                "note": ""
+              },
+              {
+                "hi": 20,
+                "lo": 18,
+                "name": "Power Rail",
+                "value": 1,
+                "text": "3.3 V",
+                "note": ""
+              },
+              {
+                "hi": 31,
+                "lo": 21,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "capability",
+            "name": "Power Budgeting Capability",
+            "section": "7.8.1.4",
+            "offset": 12,
+            "width": 8,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "System Allocated",
+                "value": 0,
+                "text": "-",
+                "note": "1 = already in the system budget; ignore the data"
+              },
+              {
+                "hi": 7,
+                "lo": 1,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "04000142000000002181070000000000"
+      },
+      {
+        "offset": 1056,
+        "header": 1610743809,
+        "id": 1,
+        "version": 2,
+        "name": "AER (Advanced Error Reporting)",
+        "next_offset": 1536,
+        "span": 480,
+        "structure_length": 44,
+        "taught": true,
+        "problem": "",
+        "summary": null,
+        "registers": [],
+        "aer": {
+          "summary": "uncorrectable errors logged: none; correctable errors logged: Advisory Non-Fatal Error",
+          "uncorrectable_errors": [],
+          "correctable_errors": [
+            "Advisory Non-Fatal Error"
+          ],
+          "uncorrectable_masked": [],
+          "correctable_masked": [
+            "Advisory Non-Fatal Error",
+            "Header Log Overflow"
+          ],
+          "fatal_errors": [
+            "Data Link Protocol Error",
+            "Surprise Down Error",
+            "Flow Control Protocol Error",
+            "Receiver Overflow",
+            "Malformed TLP",
+            "Uncorrectable Internal Error"
+          ],
+          "first_error_pointer": 0,
+          "severity_is_spec_default": true,
+          "header_log": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "header_log_wire_bytes": "00000000000000000000000000000000",
+          "tlp_prefix_log": null,
+          "registers": [
+            {
+              "key": "ue_status",
+              "name": "Uncorrectable Error Status",
+              "section": "7.8.4.2",
+              "offset": 4,
+              "width": 32,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Undefined (was Link Training Error)",
+                  "value": 0,
+                  "text": "0 (undefined, ignore)",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 1,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Data Link Protocol Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Surprise Down Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 11,
+                  "lo": 6,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Poisoned TLP Received",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Flow Control Protocol Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Completion Timeout",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Completer Abort",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 16,
+                  "lo": 16,
+                  "name": "Unexpected Completion",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "Receiver Overflow",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 18,
+                  "lo": 18,
+                  "name": "Malformed TLP",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 19,
+                  "lo": 19,
+                  "name": "ECRC Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 20,
+                  "lo": 20,
+                  "name": "Unsupported Request Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 21,
+                  "lo": 21,
+                  "name": "ACS Violation",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 22,
+                  "lo": 22,
+                  "name": "Uncorrectable Internal Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 23,
+                  "lo": 23,
+                  "name": "MC Blocked TLP",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 24,
+                  "lo": 24,
+                  "name": "AtomicOp Egress Blocked",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 25,
+                  "lo": 25,
+                  "name": "TLP Prefix Blocked Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 26,
+                  "lo": 26,
+                  "name": "Poisoned TLP Egress Blocked",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 31,
+                  "lo": 27,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "ue_mask",
+              "name": "Uncorrectable Error Mask",
+              "section": "7.8.4.3",
+              "offset": 8,
+              "width": 32,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Undefined (was Link Training Error)",
+                  "value": 0,
+                  "text": "0 (undefined, ignore)",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 1,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Data Link Protocol Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Surprise Down Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 11,
+                  "lo": 6,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Poisoned TLP Received",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Flow Control Protocol Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Completion Timeout",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Completer Abort",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 16,
+                  "lo": 16,
+                  "name": "Unexpected Completion",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "Receiver Overflow",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 18,
+                  "lo": 18,
+                  "name": "Malformed TLP",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 19,
+                  "lo": 19,
+                  "name": "ECRC Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 20,
+                  "lo": 20,
+                  "name": "Unsupported Request Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 21,
+                  "lo": 21,
+                  "name": "ACS Violation",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 22,
+                  "lo": 22,
+                  "name": "Uncorrectable Internal Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 23,
+                  "lo": 23,
+                  "name": "MC Blocked TLP",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 24,
+                  "lo": 24,
+                  "name": "AtomicOp Egress Blocked",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 25,
+                  "lo": 25,
+                  "name": "TLP Prefix Blocked Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 26,
+                  "lo": 26,
+                  "name": "Poisoned TLP Egress Blocked",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 31,
+                  "lo": 27,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "ue_severity",
+              "name": "Uncorrectable Error Severity",
+              "section": "7.8.4.4",
+              "offset": 12,
+              "width": 32,
+              "raw": 4595760,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Undefined (was Link Training Error)",
+                  "value": 0,
+                  "text": "0 (undefined, ignore)",
+                  "note": ""
+                },
+                {
+                  "hi": 3,
+                  "lo": 1,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 4,
+                  "lo": 4,
+                  "name": "Data Link Protocol Error",
+                  "value": 1,
+                  "text": "fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "Surprise Down Error",
+                  "value": 1,
+                  "text": "fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 11,
+                  "lo": 6,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Poisoned TLP Received",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Flow Control Protocol Error",
+                  "value": 1,
+                  "text": "fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Completion Timeout",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Completer Abort",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 16,
+                  "lo": 16,
+                  "name": "Unexpected Completion",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 17,
+                  "lo": 17,
+                  "name": "Receiver Overflow",
+                  "value": 1,
+                  "text": "fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 18,
+                  "lo": 18,
+                  "name": "Malformed TLP",
+                  "value": 1,
+                  "text": "fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 19,
+                  "lo": 19,
+                  "name": "ECRC Error",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 20,
+                  "lo": 20,
+                  "name": "Unsupported Request Error",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 21,
+                  "lo": 21,
+                  "name": "ACS Violation",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 22,
+                  "lo": 22,
+                  "name": "Uncorrectable Internal Error",
+                  "value": 1,
+                  "text": "fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 23,
+                  "lo": 23,
+                  "name": "MC Blocked TLP",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 24,
+                  "lo": 24,
+                  "name": "AtomicOp Egress Blocked",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 25,
+                  "lo": 25,
+                  "name": "TLP Prefix Blocked Error",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 26,
+                  "lo": 26,
+                  "name": "Poisoned TLP Egress Blocked",
+                  "value": 0,
+                  "text": "non-fatal",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 31,
+                  "lo": 27,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "ce_status",
+              "name": "Correctable Error Status",
+              "section": "7.8.4.5",
+              "offset": 16,
+              "width": 32,
+              "raw": 8192,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Receiver Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 5,
+                  "lo": 1,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Bad TLP",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "Bad DLLP",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "REPLAY_NUM Rollover",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 11,
+                  "lo": 9,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Replay Timer Timeout",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Advisory Non-Fatal Error",
+                  "value": 1,
+                  "text": "+ error occurred (write 1 to clear)",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Corrected Internal Error",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Header Log Overflow",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RW1CS"
+                },
+                {
+                  "hi": 31,
+                  "lo": 16,
+                  "name": "RsvdZ",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "ce_mask",
+              "name": "Correctable Error Mask",
+              "section": "7.8.4.6",
+              "offset": 20,
+              "width": 32,
+              "raw": 40960,
+              "fields": [
+                {
+                  "hi": 0,
+                  "lo": 0,
+                  "name": "Receiver Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 5,
+                  "lo": 1,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "Bad TLP",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "Bad DLLP",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "REPLAY_NUM Rollover",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 11,
+                  "lo": 9,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Replay Timer Timeout",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 13,
+                  "lo": 13,
+                  "name": "Advisory Non-Fatal Error",
+                  "value": 1,
+                  "text": "masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 14,
+                  "lo": 14,
+                  "name": "Corrected Internal Error",
+                  "value": 0,
+                  "text": "reported",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 15,
+                  "lo": 15,
+                  "name": "Header Log Overflow",
+                  "value": 1,
+                  "text": "masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)",
+                  "note": "RWS"
+                },
+                {
+                  "hi": 31,
+                  "lo": 16,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "key": "caps_control",
+              "name": "Advanced Error Capabilities and Control",
+              "section": "7.8.4.7",
+              "offset": 24,
+              "width": 32,
+              "raw": 0,
+              "fields": [
+                {
+                  "hi": 4,
+                  "lo": 0,
+                  "name": "First Error Pointer",
+                  "value": 0,
+                  "text": "bit 0 of Uncorrectable Error Status",
+                  "note": "ROS; meaningful only while that status bit is set, which bit 11's own wording implies"
+                },
+                {
+                  "hi": 5,
+                  "lo": 5,
+                  "name": "ECRC Generation Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 6,
+                  "lo": 6,
+                  "name": "ECRC Generation Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 7,
+                  "lo": 7,
+                  "name": "ECRC Check Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 8,
+                  "lo": 8,
+                  "name": "ECRC Check Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 9,
+                  "lo": 9,
+                  "name": "Multiple Header Recording Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 10,
+                  "lo": 10,
+                  "name": "Multiple Header Recording Enable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 11,
+                  "lo": 11,
+                  "name": "TLP Prefix Log Present",
+                  "value": 0,
+                  "text": "-",
+                  "note": "RsvdP unless End-End TLP Prefix Supported"
+                },
+                {
+                  "hi": 12,
+                  "lo": 12,
+                  "name": "Completion Timeout Prefix/Header Log Capable",
+                  "value": 0,
+                  "text": "-",
+                  "note": ""
+                },
+                {
+                  "hi": 31,
+                  "lo": 13,
+                  "name": "RsvdP",
+                  "value": 0,
+                  "text": "0",
+                  "note": ""
+                }
+              ]
+            }
+          ]
+        },
+        "structure_data": "010002600000000000000000302046000020000000a000000000000000000000000000000000000000000000"
+      },
+      {
+        "offset": 1536,
+        "header": 2415984651,
+        "id": 11,
+        "version": 1,
+        "name": "Vendor-Specific Extended",
+        "next_offset": 2304,
+        "span": 768,
+        "structure_length": 36,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [
+          {
+            "key": "vsec_header",
+            "name": "Vendor-Specific Header",
+            "section": "7.9.5.2",
+            "offset": 4,
+            "width": 32,
+            "raw": 37814273,
+            "fields": [
+              {
+                "hi": 15,
+                "lo": 0,
+                "name": "VSEC ID",
+                "value": 1,
+                "text": "0001h",
+                "note": "vendor-defined; qualify by Vendor ID first"
+              },
+              {
+                "hi": 19,
+                "lo": 16,
+                "name": "VSEC Rev",
+                "value": 1,
+                "text": "1",
+                "note": ""
+              },
+              {
+                "hi": 31,
+                "lo": 20,
+                "name": "VSEC Length",
+                "value": 36,
+                "text": "024h = 36 bytes",
+                "note": "whole structure incl. both headers"
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "0b0001900100410202004101011800000110000000000000000000000000000000000000"
+      },
+      {
+        "offset": 2304,
+        "header": 3137404953,
+        "id": 25,
+        "version": 1,
+        "name": "Secondary PCIe",
+        "next_offset": 2992,
+        "span": 688,
+        "structure_length": 44,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [
+          {
+            "key": "link_control_3",
+            "name": "Link Control 3",
+            "section": "7.7.3.2",
+            "offset": 4,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "Perform Equalization",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 1,
+                "lo": 1,
+                "name": "Link Equalization Request Interrupt Enable",
+                "value": 0,
+                "text": "-",
+                "note": ""
+              },
+              {
+                "hi": 8,
+                "lo": 2,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 15,
+                "lo": 9,
+                "name": "Enable Lower SKP OS Generation Vector",
+                "value": 0,
+                "text": "none",
+                "note": ""
+              },
+              {
+                "hi": 31,
+                "lo": 16,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "lane_error_status",
+            "name": "Lane Error Status",
+            "section": "7.7.3.3",
+            "offset": 8,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 31,
+                "lo": 0,
+                "name": "Lane Error Status Bits",
+                "value": 0,
+                "text": "none",
+                "note": "RW1CS; bit N = Lane N"
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "190001bb00000000000000000077007700770077007700770077007700770077007700770077007700770077"
+      },
+      {
+        "offset": 2992,
+        "header": 3250651157,
+        "id": 21,
+        "version": 1,
+        "name": "Resizable BAR",
+        "next_offset": 3100,
+        "span": 108,
+        "structure_length": null,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [],
+        "aer": null,
+        "structure_data": "1500c1c1000100006004000000fc0300010d00000002000003050000100041c10600000000000000100010000000000004000100000089247305000001000000000000000c000000000000000c00000000000000000000000000000000000000000000000e00c1c100010000"
+      },
+      {
+        "offset": 3100,
+        "header": 3489726502,
+        "id": 38,
+        "version": 1,
+        "name": "Physical Layer 16.0 GT/s",
+        "next_offset": 3328,
+        "span": 228,
+        "structure_length": 48,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [
+          {
+            "key": "capabilities",
+            "name": "16.0 GT/s Capabilities",
+            "section": "7.7.5.2",
+            "offset": 4,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 31,
+                "lo": 0,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "control",
+            "name": "16.0 GT/s Control",
+            "section": "7.7.5.3",
+            "offset": 8,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 31,
+                "lo": 0,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "status",
+            "name": "16.0 GT/s Status",
+            "section": "7.7.5.4",
+            "offset": 12,
+            "width": 32,
+            "raw": 15,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "Equalization 16.0 GT/s Complete",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 1,
+                "lo": 1,
+                "name": "Equalization 16.0 GT/s Phase 1 Successful",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 2,
+                "lo": 2,
+                "name": "Equalization 16.0 GT/s Phase 2 Successful",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 3,
+                "lo": 3,
+                "name": "Equalization 16.0 GT/s Phase 3 Successful",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 4,
+                "lo": 4,
+                "name": "Link Equalization Request 16.0 GT/s",
+                "value": 0,
+                "text": "-",
+                "note": "RW1CS"
+              },
+              {
+                "hi": 31,
+                "lo": 5,
+                "name": "RsvdZ",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "local_parity_mismatch",
+            "name": "16.0 GT/s Local Data Parity Mismatch Status",
+            "section": "7.7.5.5",
+            "offset": 16,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 31,
+                "lo": 0,
+                "name": "per-lane bits",
+                "value": 0,
+                "text": "none",
+                "note": "RW1CS; bit N = Lane N"
+              }
+            ]
+          },
+          {
+            "key": "first_retimer_parity_mismatch",
+            "name": "16.0 GT/s First Retimer Data Parity Mismatch Status",
+            "section": "7.7.5.6",
+            "offset": 20,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 31,
+                "lo": 0,
+                "name": "per-lane bits",
+                "value": 0,
+                "text": "none",
+                "note": "RW1CS; bit N = Lane N"
+              }
+            ]
+          },
+          {
+            "key": "second_retimer_parity_mismatch",
+            "name": "16.0 GT/s Second Retimer Data Parity Mismatch Status",
+            "section": "7.7.5.7",
+            "offset": 24,
+            "width": 32,
+            "raw": 0,
+            "fields": [
+              {
+                "hi": 31,
+                "lo": 0,
+                "name": "per-lane bits",
+                "value": 0,
+                "text": "none",
+                "note": "RW1CS; bit N = Lane N"
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "260001d000000000000000000f0000000000000000000000000000000000000070707070707070707070707070707070"
+      },
+      {
+        "offset": 3328,
+        "header": 3758161959,
+        "id": 39,
+        "version": 1,
+        "name": "Lane Margining at the Receiver",
+        "next_offset": 3584,
+        "span": 256,
+        "structure_length": 72,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [
+          {
+            "key": "port_capabilities",
+            "name": "Margining Port Capabilities",
+            "section": "7.7.7.2",
+            "offset": 4,
+            "width": 16,
+            "raw": 1,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "Margining uses Driver Software",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 15,
+                "lo": 1,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "port_status",
+            "name": "Margining Port Status",
+            "section": "7.7.7.3",
+            "offset": 6,
+            "width": 16,
+            "raw": 3,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "Margining Ready",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 1,
+                "lo": 1,
+                "name": "Margining Software Ready",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 15,
+                "lo": 2,
+                "name": "RsvdZ",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "270001e001000300389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000389c0000"
+      },
+      {
+        "offset": 3584,
+        "header": 65573,
+        "id": 37,
+        "version": 1,
+        "name": "Data Link Feature",
+        "next_offset": 0,
+        "span": 512,
+        "structure_length": 12,
+        "taught": false,
+        "problem": "",
+        "summary": null,
+        "registers": [
+          {
+            "key": "capabilities",
+            "name": "Data Link Feature Capabilities",
+            "section": "7.7.4.2",
+            "offset": 4,
+            "width": 32,
+            "raw": 2147483649,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "Local Scaled Flow Control Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 22,
+                "lo": 1,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 30,
+                "lo": 23,
+                "name": "RsvdP",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 31,
+                "lo": 31,
+                "name": "Data Link Feature Exchange Enable",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              }
+            ]
+          },
+          {
+            "key": "status",
+            "name": "Data Link Feature Status",
+            "section": "7.7.4.3",
+            "offset": 8,
+            "width": 32,
+            "raw": 2147483649,
+            "fields": [
+              {
+                "hi": 0,
+                "lo": 0,
+                "name": "Remote Scaled Flow Control Supported",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              },
+              {
+                "hi": 22,
+                "lo": 1,
+                "name": "Undefined",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 30,
+                "lo": 23,
+                "name": "RsvdZ",
+                "value": 0,
+                "text": "0",
+                "note": ""
+              },
+              {
+                "hi": 31,
+                "lo": 31,
+                "name": "Remote Data Link Feature Supported Valid",
+                "value": 1,
+                "text": "+",
+                "note": ""
+              }
+            ]
+          }
+        ],
+        "aer": null,
+        "structure_data": "250001000100008001000080"
+      }
+    ]
+  }
+}

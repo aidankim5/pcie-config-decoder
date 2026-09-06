@@ -1,0 +1,364 @@
+# 02:00.0 Non-Volatile memory controller: Samsung Electronics Co Ltd NVMe SSD Controller S4LV008[Pascal] (prog-if 02 [NVM Express])
+# tests\fixtures\samsung990pro_02-00.0.txt: 4096 bytes (lspci text) = full ECAM space, 4096 bytes (spec 7.2.2)
+Non-Volatile memory controller (NVM Express): Samsung Electronics Co Ltd NVMe SSD Controller S4LV008[Pascal] (rev 00) (prog-if 02 [NVM Express])
+Type 0 header (spec 7.5.1.1, 7.5.1.2)  [taught]
+  00h Vendor ID          144d                 Samsung Electronics Co Ltd
+  02h Device ID          a80c                 NVMe SSD Controller S4LV008[Pascal]
+  04h Command            0406                 set: Memory Space Enable, Bus Master Enable, Interrupt Disable
+  06h Status             0011                 set: Immediate Readiness, Capabilities List
+  08h Revision ID        00
+  09h Class Code         010802               Non-Volatile memory controller (NVM Express) (base 01, sub 08, prog-if 02)
+  0Ch Cache Line Size    10                   16 DWORDs = 64 bytes
+  0Dh Latency Timer      00
+  0Eh Header Type        00                   Type 0
+  0Fh BIST               00
+  10h BAR0               85f00004 14h:00000000 Memory at 85f00000 (64-bit, non-prefetchable); size: not determinable from a dump (needs the write-all-ones probe)
+  18h BAR2               00000000             reads as zero: unimplemented, or not assigned
+  1Ch BAR3               00000000             reads as zero: unimplemented, or not assigned
+  20h BAR4               00000000             reads as zero: unimplemented, or not assigned
+  24h BAR5               00000000             reads as zero: unimplemented, or not assigned
+  28h Cardbus CIS        00000000
+  2Ch Subsystem          144d:a801            Samsung Electronics Co Ltd SSD 990 PRO
+  30h Expansion ROM      00000000             reads as zero: no Expansion ROM, or not assigned
+  34h Capabilities Ptr   40
+  3Ch Interrupt Line     ff                   ff = unknown / no connection (PCI convention)
+  3Dh Interrupt Pin      01                   INTA
+  3Eh Min_Gnt/Max_Lat    00 00                legacy PCI, hardwired 0
+
+Standard capability chain (spec 7.5.1.1.11; Capabilities Pointer 34h = 40h)  [taught]
+  40h  ID 01  Power Management                 next 50h     16 bytes to the next start at 50h; structure 8 bytes (spec)  [ahead: decoded by the tool, not yet worked through by hand]
+  50h  ID 05  MSI                              next 70h     32 bytes to the next start at 70h; structure 16 bytes (DWORDs of Figures 7-44 to 7-47 per Message Control; a count, the spec gives no byte size)
+  70h  ID 10  PCI Express                      next B0h     64 bytes to the next start at B0h; structure 60 bytes (by Capability Version and port type; a choice of this tool, see pcie_cap.py)
+  B0h  ID 11  MSI-X                            end of list  80 bytes to 100h, the end of the PCI-compatible space; structure 12 bytes (spec)  [ahead: decoded by the tool, not yet worked through by hand]
+
+-- 40h Power Management (ID 01, spec 7.5.2, 8 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  +02h (42h) PMC                    0013       version 3; PME Clock-; Immediate Readiness on Return to D0+; DSI-; Aux current 0 mA; D1-; D2-; PME from: none
+  +04h (44h) PMCSR                  0008       D0; No Soft Reset+; PME_En-; Data_Select 0, Data_Scale 0: Data register reads 00 (not implemented, or nothing selected; 7.5.2.3); PME_Status-
+  +06h (46h) Reserved               00         bits 5:0 RsvdP, 7:6 undefined (Table 7-14 DWORD bits 21:16 / 23:22; pci_regs.h names 7:6 PPB_B2_B3 / BPCC_ENABLE)
+  +07h (47h) Data                   00         optional; 00 when not implemented
+
+-- 50h MSI (ID 05, spec 7.7.1, 16 bytes by DWORD count: 64-bit address, no per-vector masking)
+  +02h (52h) Message Control        008a       Enable-; 1 of 32 vectors (codes 0/5, 2^code); 64-bit Address+; Per-Vector Masking-; Extended Message Data capable- enable-
+  +04h (54h) Message Address        00000000   bits 31:2; DWORD aligned
+  +08h (58h) Message Upper Addr     00000000   bits 63:32 -> full address 0000000000000000
+  +0Ch (5Ch) Message Data           0000       low 16 bits of the DWORD; high 16 bits 0000: not Extended Message Data Capable, so undefined here (7.7.1.6)
+
+-- 70h PCI Express (ID 10, spec 7.5.3, 60 bytes: version 2, PCI Express Endpoint)
+  Link: Speed 16 GT/s, Width x4   (lspci's LnkSta line; 'downgraded' = below Link Capabilities, not said for Downstream Ports)
+  +02h (72h) PCI Express Capabilities 0002       spec 7.5.3.2
+        3:0    Capability Version                                 2     2
+        7:4    Device/Port Type                                   0     PCI Express Endpoint
+        8      Slot Implemented                                   0     -  (Downstream Ports only)
+        13:9   Interrupt Message Number                           0     0  (MSI/MSI-X vector for this capability's status bits)
+  +04h (74h) Device Capabilities      112c8fe2   spec 7.5.3.3
+        2:0    Max_Payload_Size Supported                         2     512 bytes
+        4:3    Phantom Functions Supported                        0     none
+        5      Extended Tag Field Supported                       1     8-bit Tag
+        8:6    Endpoint L0s Acceptable Latency                    7     no limit
+        11:9   Endpoint L1 Acceptable Latency                     7     no limit
+        15     Role-Based Error Reporting                         1     +
+        16     ERR_COR Subclass Capable                           0     -
+        25:18  Captured Slot Power Limit Value                    75    75  (Upstream Ports only; Watts = value x scale; F0h-F2h at scale 0 = 250/275/300 W (7.5.3.9))
+        27:26  Captured Slot Power Limit Scale                    0     1.0x
+        28     Function Level Reset Capability                    1     +
+  +08h (78h) Device Control           293f       spec 7.5.3.4
+        0      Correctable Error Reporting Enable                 1     +
+        1      Non-Fatal Error Reporting Enable                   1     +
+        2      Fatal Error Reporting Enable                       1     +
+        3      Unsupported Request Reporting Enable               1     +
+        4      Enable Relaxed Ordering                            1     +
+        7:5    Max_Payload_Size                                   1     256 bytes
+        8      Extended Tag Field Enable                          1     +
+        9      Phantom Functions Enable                           0     -
+        10     Aux Power PM Enable                                0     -  (RWS, sticky)
+        11     Enable No Snoop                                    1     +
+        14:12  Max_Read_Request_Size                              2     512 bytes
+        15     Initiate FLR / Bridge Config Retry Enable          0     -  (Endpoints with FLR: Initiate FLR (write 1, reads 0); PCIe-to-PCI/PCI-X Bridges: Bridge Configuration Retry Enable (RW); others RsvdP)
+  +0Ah (7Ah) Device Status            0000       spec 7.5.3.5
+        0      Correctable Error Detected                         0     -  (RW1C)
+        1      Non-Fatal Error Detected                           0     -  (RW1C)
+        2      Fatal Error Detected                               0     -  (RW1C)
+        3      Unsupported Request Detected                       0     -  (RW1C)
+        4      AUX Power Detected                                 0     -
+        5      Transactions Pending                               0     -
+        6      Emergency Power Reduction Detected                 0     -  (RW1C)
+  +0Ch (7Ch) Link Capabilities        00477844   spec 7.5.3.6
+        3:0    Max Link Speed                                     4     16 GT/s  (index into the Supported Link Speeds Vector)
+        9:4    Maximum Link Width                                 4     x4
+        11:10  ASPM Support                                       2     L1
+        14:12  L0s Exit Latency                                   7     > 4 us  (undefined when L0s is unsupported)
+        17:15  L1 Exit Latency                                    6     32 us to 64 us  (undefined when ASPM L1 is unsupported)
+        18     Clock Power Management                             1     +  (Upstream Ports: tolerates CLKREQ# clock removal in L1 and L2/L3 Ready)
+        19     Surprise Down Error Reporting Capable              0     -  (Downstream Ports only)
+        20     Data Link Layer Link Active Reporting Capable      0     -  (Downstream Ports only)
+        21     Link Bandwidth Notification Capability             0     -  (Root Ports and Switch Downstream Ports)
+        22     ASPM Optionality Compliance                        1     +
+        31:24  Port Number                                        0     0
+  +10h (80h) Link Control             0140       spec 7.5.3.7
+        1:0    ASPM Control                                       0     disabled
+        3      Read Completion Boundary (RCB)                     0     64 bytes
+        4      Link Disable                                       0     -  (Downstream Ports only)
+        5      Retrain Link                                       0     -  (reads 0; Downstream Ports only)
+        6      Common Clock Configuration                         1     +
+        7      Extended Synch                                     0     -
+        8      Enable Clock Power Management                      1     +
+        9      Hardware Autonomous Width Disable                  0     -
+        10     Link Bandwidth Management Interrupt Enable         0     -  (Downstream Ports only)
+        11     Link Autonomous Bandwidth Interrupt Enable         0     -  (Downstream Ports only)
+        15:14  DRS Signaling Control                              0     DRS not reported  (Downstream Ports only)
+  +12h (82h) Link Status              1044       spec 7.5.3.8
+        3:0    Current Link Speed                                 4     16 GT/s  (index into the Supported Link Speeds Vector)
+        9:4    Negotiated Link Width                              4     x4
+        11     Link Training                                      0     -  (Downstream Ports only)
+        12     Slot Clock Configuration                           1     +
+        13     Data Link Layer Link Active                        0     -  (valid only if Link Capabilities bit 20)
+        14     Link Bandwidth Management Status                   0     -  (RW1C; Downstream Ports only)
+        15     Link Autonomous Bandwidth Status                   0     -  (RW1C; Downstream Ports only)
+  +14h (84h) Slot Capabilities        00000000   spec 7.5.3.9; Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice
+  +18h (88h) Slot Control             0000       spec 7.5.3.10; Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice
+  +1Ah (8Ah) Slot Status              0000       spec 7.5.3.11; Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice
+  +1Ch (8Ch) Root Control             0000       spec 7.5.3.12; Root Ports and Root Complex Event Collectors only; bit names omitted, a choice
+  +1Eh (8Eh) Root Capabilities        0000       spec 7.5.3.13; Root Ports and Root Complex Event Collectors only; bit names omitted, a choice
+  +20h (90h) Root Status              00000000   spec 7.5.3.14; Root Ports and Root Complex Event Collectors only; bit names omitted, a choice
+  +24h (94h) Device Capabilities 2    0001081f   spec 7.5.3.15
+        3:0    Completion Timeout Ranges Supported                15    A, B, C and D  (A 50us-10ms, B 10ms-250ms, C 250ms-4s, D 4s-64s)
+        4      Completion Timeout Disable Supported               1     +
+        5      ARI Forwarding Supported                           0     -  (Downstream Ports only)
+        6      AtomicOp Routing Supported                         0     -  (Ports only)
+        7      32-bit AtomicOp Completer Supported                0     -
+        8      64-bit AtomicOp Completer Supported                0     -
+        9      128-bit CAS Completer Supported                    0     -
+        10     No RO-enabled PR-PR Passing                        0     -
+        11     LTR Mechanism Supported                            1     +
+        13:12  TPH Completer Supported                            0     not supported
+        15:14  LN System CLS                                      0     not supported or not in effect  (Root Ports only)
+        16     10-Bit Tag Completer Supported                     1     +
+        17     10-Bit Tag Requester Supported                     0     -
+        19:18  OBFF Supported                                     0     not supported
+        20     Extended Fmt Field Supported                       0     -
+        21     End-End TLP Prefix Supported                       0     -
+        23:22  Max End-End TLP Prefixes                           0     4  (meaningful only if End-End TLP Prefix Supported)
+        25:24  Emergency Power Reduction Supported                0     not supported
+        26     Emergency Power Reduction Initialization Required  0     -
+        31     FRS Supported                                      0     -
+  +28h (98h) Device Control 2         0400       spec 7.5.3.16
+        3:0    Completion Timeout Value                           0     50 us to 50 ms (default)
+        4      Completion Timeout Disable                         0     -
+        5      ARI Forwarding Enable                              0     -  (Downstream Ports only)
+        6      AtomicOp Requester Enable                          0     -
+        7      AtomicOp Egress Blocking                           0     -  (Ports only)
+        8      IDO Request Enable                                 0     -
+        9      IDO Completion Enable                              0     -
+        10     LTR Mechanism Enable                               1     +
+        11     Emergency Power Reduction Request                  0     -
+        12     10-Bit Tag Requester Enable                        0     -
+        14:13  OBFF Enable                                        0     disabled
+        15     End-End TLP Prefix Blocking                        0     forwarding enabled  (Ports only)
+  +2Ah (9Ah) Device Status 2          0000       spec 7.5.3.17; placeholder register
+  +2Ch (9Ch) Link Capabilities 2      0180001e   spec 7.5.3.18
+        7:1    Supported Link Speeds Vector                       15    2.5, 5, 8, 16 GT/s  (bit 0 = 2.5 GT/s ... bit 4 = 32 GT/s)
+        8      Crosslink Supported                                0     -
+        15:9   Lower SKP OS Generation Supported Speeds Vector    0     none
+        22:16  Lower SKP OS Reception Supported Speeds Vector     0     none
+        23     Retimer Presence Detect Supported                  1     +
+        24     Two Retimers Presence Detect Supported             1     +
+        31     DRS Supported                                      0     -
+  +30h (A0h) Link Control 2           0004       spec 7.5.3.19
+        3:0    Target Link Speed                                  4     16 GT/s  (index into the Supported Link Speeds Vector)
+        4      Enter Compliance                                   0     -
+        5      Hardware Autonomous Speed Disable                  0     -
+        6      Selectable De-emphasis                             0     -6 dB  (5.0 GT/s only)
+        9:7    Transmit Margin                                    0     normal operating range
+        10     Enter Modified Compliance                          0     -
+        11     Compliance SOS                                     0     -
+        15:12  Compliance Preset/De-emphasis                      0     -6 dB at 5.0 GT/s / preset P0 at 8.0 GT/s and up (Table 4-3: 0 dB preshoot, -6 dB de-emphasis)  (Table 4-3 in 4.2.3.2 names the presets)
+  +32h (A2h) Link Status 2            011e       spec 7.5.3.20
+        0      Current De-emphasis Level                          0     -6 dB  (5.0 GT/s only)
+        1      Equalization 8.0 GT/s Complete                     1     +
+        2      Equalization 8.0 GT/s Phase 1 Successful           1     +
+        3      Equalization 8.0 GT/s Phase 2 Successful           1     +
+        4      Equalization 8.0 GT/s Phase 3 Successful           1     +
+        5      Link Equalization Request 8.0 GT/s                 0     -  (RW1CS)
+        6      Retimer Presence Detected                          0     -
+        7      Two Retimers Presence Detected                     0     -
+        9:8    Crosslink Resolution                               1     resolved as Upstream Port
+        14:12  Downstream Component Presence                      0     Link Down, presence not determined  (Downstream Ports with DRS only)
+        15     DRS Message Received                               0     -  (RW1C)
+  +34h (A4h) Slot Capabilities 2      00000000   spec 7.5.3.21; Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice
+  +38h (A8h) Slot Control 2           0000       spec 7.5.3.22; Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice
+  +3Ah (AAh) Slot Status 2            0000       spec 7.5.3.23; Downstream Ports with a slot only (Slot Implemented = 0 here); bit names omitted, a choice
+
+-- B0h MSI-X (ID 11, spec 7.7.2, 12 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  +02h (B2h) Message Control        8010       Enable+; Function Mask-; Table Size code 16 = 17 entries
+  +04h (B4h) Table Offset/BIR       00003000   BIR 0 = BAR at 10h, offset 3000h (the table is in memory space)
+  +08h (B8h) PBA Offset/BIR         00002000   BIR 0 = BAR at 10h, offset 2000h
+
+Extended capability chain (spec 7.6.1, 7.6.3; starts at 100h, one DWORD header each)  [taught]
+  100h  ID 0001 v2  AER (Advanced Error Reporting)               next 168h    104 bytes to the next start at 168h; structure 44 bytes (by port type and End-End TLP Prefix Supported; a choice, see aer.py)
+  168h  ID 0019 v1  Secondary PCIe                               next 188h    32 bytes to the next start at 188h; structure 20 bytes (from the lane count)  [ahead: decoded by the tool, not yet worked through by hand]
+  188h  ID 0026 v1  Physical Layer 16.0 GT/s                     next 1ACh    36 bytes to the next start at 1ACh; structure 36 bytes (from the lane count)  [ahead: decoded by the tool, not yet worked through by hand]
+  1ACh  ID 0027 v1  Lane Margining at the Receiver               next 1C4h    24 bytes to the next start at 1C4h; structure 24 bytes (from the lane count)  [ahead: decoded by the tool, not yet worked through by hand]
+  1C4h  ID 0018 v1  LTR (Latency Tolerance Reporting)            next 1CCh    8 bytes to the next start at 1CCh; structure 8 bytes (the capability's own figure)  [ahead: decoded by the tool, not yet worked through by hand]
+  1CCh  ID 001e v1  L1 PM Substates                              next 350h    388 bytes to the next start at 350h; structure 16 bytes (the capability's own figure)  [ahead: decoded by the tool, not yet worked through by hand]
+  350h  ID 0025 v1  Data Link Feature                            end of list  3248 bytes to 1000h, the end of the ECAM frame; structure 12 bytes (the capability's own figure)  [ahead: decoded by the tool, not yet worked through by hand]
+
+-- 100h AER (Advanced Error Reporting) (ID 0001 v2, header 16820001, 44 bytes)
+  summary: uncorrectable errors logged: none; correctable errors logged: none
+  +04h (104h) Uncorrectable Error Status              00000000   spec 7.8.4.2
+        4      Data Link Protocol Error                           0     -  (RW1CS)
+        5      Surprise Down Error                                0     -  (RW1CS)
+        12     Poisoned TLP Received                              0     -  (RW1CS)
+        13     Flow Control Protocol Error                        0     -  (RW1CS)
+        14     Completion Timeout                                 0     -  (RW1CS)
+        15     Completer Abort                                    0     -  (RW1CS)
+        16     Unexpected Completion                              0     -  (RW1CS)
+        17     Receiver Overflow                                  0     -  (RW1CS)
+        18     Malformed TLP                                      0     -  (RW1CS)
+        19     ECRC Error                                         0     -  (RW1CS)
+        20     Unsupported Request Error                          0     -  (RW1CS)
+        21     ACS Violation                                      0     -  (RW1CS)
+        22     Uncorrectable Internal Error                       0     -  (RW1CS)
+        23     MC Blocked TLP                                     0     -  (RW1CS)
+        24     AtomicOp Egress Blocked                            0     -  (RW1CS)
+        25     TLP Prefix Blocked Error                           0     -  (RW1CS)
+        26     Poisoned TLP Egress Blocked                        0     -  (RW1CS)
+  +08h (108h) Uncorrectable Error Mask                00400000   spec 7.8.4.3
+        4      Data Link Protocol Error                           0     reported  (RWS)
+        5      Surprise Down Error                                0     reported  (RWS)
+        12     Poisoned TLP Received                              0     reported  (RWS)
+        13     Flow Control Protocol Error                        0     reported  (RWS)
+        14     Completion Timeout                                 0     reported  (RWS)
+        15     Completer Abort                                    0     reported  (RWS)
+        16     Unexpected Completion                              0     reported  (RWS)
+        17     Receiver Overflow                                  0     reported  (RWS)
+        18     Malformed TLP                                      0     reported  (RWS)
+        19     ECRC Error                                         0     reported  (RWS)
+        20     Unsupported Request Error                          0     reported  (RWS)
+        21     ACS Violation                                      0     reported  (RWS)
+        22     Uncorrectable Internal Error                       1     masked (not reported, and not recorded in the Header Log or First Error Pointer; 7.8.4.3)  (RWS)
+        23     MC Blocked TLP                                     0     reported  (RWS)
+        24     AtomicOp Egress Blocked                            0     reported  (RWS)
+        25     TLP Prefix Blocked Error                           0     reported  (RWS)
+        26     Poisoned TLP Egress Blocked                        0     reported  (RWS)
+  +0Ch (10Ch) Uncorrectable Error Severity            00462030   spec 7.8.4.4
+        4      Data Link Protocol Error                           1     fatal  (RWS)
+        5      Surprise Down Error                                1     fatal  (RWS)
+        12     Poisoned TLP Received                              0     non-fatal  (RWS)
+        13     Flow Control Protocol Error                        1     fatal  (RWS)
+        14     Completion Timeout                                 0     non-fatal  (RWS)
+        15     Completer Abort                                    0     non-fatal  (RWS)
+        16     Unexpected Completion                              0     non-fatal  (RWS)
+        17     Receiver Overflow                                  1     fatal  (RWS)
+        18     Malformed TLP                                      1     fatal  (RWS)
+        19     ECRC Error                                         0     non-fatal  (RWS)
+        20     Unsupported Request Error                          0     non-fatal  (RWS)
+        21     ACS Violation                                      0     non-fatal  (RWS)
+        22     Uncorrectable Internal Error                       1     fatal  (RWS)
+        23     MC Blocked TLP                                     0     non-fatal  (RWS)
+        24     AtomicOp Egress Blocked                            0     non-fatal  (RWS)
+        25     TLP Prefix Blocked Error                           0     non-fatal  (RWS)
+        26     Poisoned TLP Egress Blocked                        0     non-fatal  (RWS)
+  +10h (110h) Correctable Error Status                00000000   spec 7.8.4.5
+        0      Receiver Error                                     0     -  (RW1CS)
+        6      Bad TLP                                            0     -  (RW1CS)
+        7      Bad DLLP                                           0     -  (RW1CS)
+        8      REPLAY_NUM Rollover                                0     -  (RW1CS)
+        12     Replay Timer Timeout                               0     -  (RW1CS)
+        13     Advisory Non-Fatal Error                           0     -  (RW1CS)
+        14     Corrected Internal Error                           0     -  (RW1CS)
+        15     Header Log Overflow                                0     -  (RW1CS)
+  +14h (114h) Correctable Error Mask                  0000e000   spec 7.8.4.6
+        0      Receiver Error                                     0     reported  (RWS)
+        6      Bad TLP                                            0     reported  (RWS)
+        7      Bad DLLP                                           0     reported  (RWS)
+        8      REPLAY_NUM Rollover                                0     reported  (RWS)
+        12     Replay Timer Timeout                               0     reported  (RWS)
+        13     Advisory Non-Fatal Error                           1     masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)  (RWS)
+        14     Corrected Internal Error                           1     masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)  (RWS)
+        15     Header Log Overflow                                1     masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)  (RWS)
+  +18h (118h) Advanced Error Capabilities and Control 000002a0   spec 7.8.4.7
+        4:0    First Error Pointer                                0     bit 0 of Uncorrectable Error Status  (ROS; meaningful only while that status bit is set, which bit 11's own wording implies)
+        5      ECRC Generation Capable                            1     +
+        6      ECRC Generation Enable                             0     -
+        7      ECRC Check Capable                                 1     +
+        8      ECRC Check Enable                                  0     -
+        9      Multiple Header Recording Capable                  1     +
+        10     Multiple Header Recording Enable                   0     -
+        11     TLP Prefix Log Present                             0     -  (RsvdP unless End-End TLP Prefix Supported)
+        12     Completion Timeout Prefix/Header Log Capable       0     -
+  +1Ch (11Ch) Header Log                                         00000000 00000000 00000000 00000000  spec 7.8.4.8; four DWORDs, header byte 0 in the top byte of the first
+  +2Ch (12Ch) Root Error regs                                    2Ch-37h: spec 7.8.4.9-7.8.4.11, Root Ports and Root Complex Event Collectors only, so not read here
+
+-- 168h Secondary PCIe (ID 0019 v1, header 18810019, 20 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  +04h (16Ch) Link Control 3     00000000   spec 7.7.3.2
+        0      Perform Equalization                               0     -
+        1      Link Equalization Request Interrupt Enable         0     -
+        15:9   Enable Lower SKP OS Generation Vector              0     none
+  +08h (170h) Lane Error Status  00000000   spec 7.7.3.3
+        31:0   Lane Error Status Bits                             0     none  (RW1CS; bit N = Lane N)
+
+-- 188h Physical Layer 16.0 GT/s (ID 0026 v1, header 1ac10026, 36 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  +04h (18Ch) 16.0 GT/s Capabilities                               00000000   spec 7.7.5.2
+  +08h (190h) 16.0 GT/s Control                                    00000000   spec 7.7.5.3
+  +0Ch (194h) 16.0 GT/s Status                                     0000000f   spec 7.7.5.4
+        0      Equalization 16.0 GT/s Complete                    1     +
+        1      Equalization 16.0 GT/s Phase 1 Successful          1     +
+        2      Equalization 16.0 GT/s Phase 2 Successful          1     +
+        3      Equalization 16.0 GT/s Phase 3 Successful          1     +
+        4      Link Equalization Request 16.0 GT/s                0     -  (RW1CS)
+  +10h (198h) 16.0 GT/s Local Data Parity Mismatch Status          00000000   spec 7.7.5.5
+        31:0   per-lane bits                                      0     none  (RW1CS; bit N = Lane N)
+  +14h (19Ch) 16.0 GT/s First Retimer Data Parity Mismatch Status  00000000   spec 7.7.5.6
+        31:0   per-lane bits                                      0     none  (RW1CS; bit N = Lane N)
+  +18h (1A0h) 16.0 GT/s Second Retimer Data Parity Mismatch Status 00000000   spec 7.7.5.7
+        31:0   per-lane bits                                      0     none  (RW1CS; bit N = Lane N)
+
+-- 1ACh Lane Margining at the Receiver (ID 0027 v1, header 1c410027, 24 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  +04h (1B0h) Margining Port Capabilities 0000       spec 7.7.7.2
+        0      Margining uses Driver Software                     0     -
+  +06h (1B2h) Margining Port Status       0000       spec 7.7.7.3
+        0      Margining Ready                                    0     -
+        1      Margining Software Ready                           0     -
+
+-- 1C4h LTR (Latency Tolerance Reporting) (ID 0018 v1, header 1cc10018, 8 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  summary: max snoop latency 15728640 ns, max no-snoop latency 15728640 ns
+  +04h (1C8h) Max Snoop Latency    100f       spec 7.8.2.2
+        9:0    LatencyValue                                       15    15
+        12:10  LatencyScale                                       4     x 1,048,576 ns
+  +06h (1CAh) Max No-Snoop Latency 100f       spec 7.8.2.3
+        9:0    LatencyValue                                       15    15
+        12:10  LatencyScale                                       4     x 1,048,576 ns
+
+-- 1CCh L1 PM Substates (ID 001e v1, header 3501001e, 16 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  summary: supported: PCI-PM L1.2+ L1.1+ ASPM L1.2+ L1.1+; Port Common_Mode_Restore_Time 10 us; Port T_POWER_ON 10 us; enabled: PCI-PM L1.2- L1.1- ASPM L1.2- L1.1-; Common_Mode_Restore_Time 0 us; LTR_L1.2_THRESHOLD 30720 ns; T_POWER_ON 10 us
+  +04h (1D0h) L1 PM Substates Capabilities 00280a1f   spec 7.8.3.2
+        0      PCI-PM L1.2 Supported                              1     +
+        1      PCI-PM L1.1 Supported                              1     +
+        2      ASPM L1.2 Supported                                1     +
+        3      ASPM L1.1 Supported                                1     +
+        4      L1 PM Substates Supported                          1     +
+        5      Link Activation Supported                          0     -  (Downstream Ports only)
+        15:8   Port Common_Mode_Restore_Time                      10    10 us
+        17:16  Port T_POWER_ON Scale                              0     2 us
+        23:19  Port T_POWER_ON Value                              5     5  (T_POWER_ON = Value x Scale)
+  +08h (1D4h) L1 PM Substates Control 1    401e0000   spec 7.8.3.3
+        0      PCI-PM L1.2 Enable                                 0     -
+        1      PCI-PM L1.1 Enable                                 0     -
+        2      ASPM L1.2 Enable                                   0     -
+        3      ASPM L1.1 Enable                                   0     -
+        4      Link Activation Interrupt Enable                   0     -
+        5      Link Activation Control                            0     -
+        15:8   Common_Mode_Restore_Time                           0     0 us
+        25:16  LTR_L1.2_THRESHOLD_Value                           30    30
+        31:29  LTR_L1.2_THRESHOLD_Scale                           2     x 1,024 ns
+  +0Ch (1D8h) L1 PM Substates Control 2    00000028   spec 7.8.3.4
+        1:0    T_POWER_ON Scale                                   0     2 us
+        7:3    T_POWER_ON Value                                   5     5  (T_POWER_ON = Value x Scale)
+
+-- 350h Data Link Feature (ID 0025 v1, header 00010025, 12 bytes)  [ahead: decoded by the tool, not yet worked through by hand]
+  +04h (354h) Data Link Feature Capabilities 80000001   spec 7.7.4.2
+        0      Local Scaled Flow Control Supported                1     +
+        31     Data Link Feature Exchange Enable                  1     +
+  +08h (358h) Data Link Feature Status       80000001   spec 7.7.4.3
+        0      Remote Scaled Flow Control Supported               1     +
+        31     Remote Data Link Feature Supported Valid           1     +
