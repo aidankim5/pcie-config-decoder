@@ -54,7 +54,7 @@ class ExtendedCapability:
     version: int  # bits 19:16
     next_offset: int  # bits 31:20 as read; 000h ends the list
     name: str
-    taught: bool  # CLAUDE.md rule 5
+    taught: bool  # the taught/ahead rule (see README)
     span: int  # a choice: bytes to the next start in address order, or to 1000h
     data: bytes  # the span bytes
     structure_length: int | None = None  # the structure's own size when the spec fixes or declares it

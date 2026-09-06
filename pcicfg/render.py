@@ -203,7 +203,7 @@ def render_header(h: Type0Header | Type1Header) -> str:
 # --- module 3: the standard capability chain -------------------------------------
 
 def ahead_tag(c: Capability) -> str:
-    """'' for a capability Aidan has worked through by hand, else the [ahead] marker (CLAUDE.md rule 5).
+    """'' for a capability Aidan has worked through by hand, else the [ahead] marker (the taught/ahead rule).
 
     'Ahead' means ahead of what he can explain, not ahead of what the tool decodes.
     """

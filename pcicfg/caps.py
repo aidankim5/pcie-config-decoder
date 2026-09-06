@@ -65,7 +65,7 @@ class Capability:
     cap_id: int  # byte 0
     next_pointer: int  # byte 1, as read (00h = end of list)
     name: str
-    taught: bool  # CLAUDE.md rule 5: has Aidan decoded this capability's registers by hand?
+    taught: bool  # the taught/ahead rule: has Aidan decoded this capability's registers by hand? (see README)
     span: int  # a choice: bytes to the next capability start in address order, or to 100h
     data: bytes  # the `span` bytes, so each capability can be read from 00 (relative offsets)
     # "" = nothing wrong. The default lets the constructor leave it out; a dataclass field

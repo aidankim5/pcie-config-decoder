@@ -20,7 +20,7 @@ Where each table comes from (spec vs. elsewhere):
   (a 1 MB file) would bury the decoder in data it does not decode.
 
 [Taught] / [Ahead] tags: TAUGHT_STANDARD_CAPS and TAUGHT_EXTENDED_CAPS list
-the capabilities Aidan has decoded by hand (CLAUDE.md rule 5). Once the
+the capabilities Aidan has decoded by hand (the taught/ahead rule; see README). Once the
 capability-chain modules exist, everything else will be printed with its name
 and an "ahead" marker so the tool never implies more than he can explain.
 """
@@ -104,7 +104,7 @@ EXTENDED_CAP_NAMES = {
     0x0031: "Physical Layer 64.0 GT/s",
 }
 
-# Capabilities Aidan has decoded by hand (CLAUDE.md rule 5: "PCI Express capability,
+# Capabilities Aidan has decoded by hand (the taught/ahead rule: "PCI Express capability,
 # AER, MSI basics"). Power Management (01h) and MSI-X (11h) stay [ahead] until he has
 # worked through their registers too.
 TAUGHT_STANDARD_CAPS = {0x05, 0x10}  # MSI, PCI Express

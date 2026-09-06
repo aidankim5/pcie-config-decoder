@@ -67,9 +67,9 @@ def test_ssd_chain_exactly():
     assert [c.structure_length for c in chain.entries] == [8, 16, 60, 12]  # PM 8, MSI 16, PCIe 60, MSI-X 12
 
 
-def test_taught_tags_follow_claude_md_rule_5():
+def test_taught_tags_follow_the_taught_ahead_rule():
     chain = walk_standard_caps(load_config_space(SSD))
-    # {id: taught} for each entry. Expected values come from CLAUDE.md rule 5, not the dump:
+    # {id: taught} for each entry. Expected values come from the taught/ahead rule, not the dump:
     # MSI (05) and PCI Express (10) are taught; Power Management (01) and MSI-X (11) are ahead.
     assert {c.cap_id: c.taught for c in chain.entries} == {0x01: False, 0x05: True, 0x10: True, 0x11: False}
 
