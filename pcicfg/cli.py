@@ -18,6 +18,7 @@ import json
 import sys
 from dataclasses import asdict
 
+from .aer import ROOT_PORT_TYPES, decode_aer
 from .caps import Capability, CapabilityChain, walk_standard_caps
 from .extcaps import ExtendedChain, decode_extended_registers, l1ss_summary, ltr_summary, walk_extended_caps
 from .header import decode_header
@@ -164,18 +165,43 @@ def chain_as_json(cs: ConfigSpace, chain: CapabilityChain | None) -> dict:
     }
 
 
-def max_link_width_of(cs: ConfigSpace, chain: CapabilityChain | None) -> int | None:
-    """Maximum Link Width from the PCI Express capability, to size the per-lane extended structures."""
+def pcie_facts(cs: ConfigSpace, chain: CapabilityChain | None) -> tuple[int | None, bool]:
+    """(Maximum Link Width, is this a Root Port or Event Collector) from the PCI Express capability.
+
+    The width sizes the per-lane extended structures; the port type says whether
+    AER's Root Error registers apply.
+    """
     if chain is None:
-        return None
+        return None, False
     pcie = chain.find(0x10)
     if pcie is None or pcie.structure_length is None or pcie.span < pcie.structure_length:
-        return None
+        return None, False
     p = decode_pcie_capability(cs, pcie.offset)
-    return p.max_link_width if p.has_link_registers else None
+    width = p.max_link_width if p.has_link_registers else None
+    return width, p.device_port_type in ROOT_PORT_TYPES
 
 
-def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None) -> dict:
+def aer_as_json(cs: ConfigSpace, c, is_root: bool) -> dict | None:
+    if c.span < 0x2C:
+        return None
+    aer = decode_aer(cs, c.offset, is_root)
+    return {
+        "summary": aer.summary,
+        "uncorrectable_errors": aer.uncorrectable_errors,
+        "correctable_errors": aer.correctable_errors,
+        "uncorrectable_masked": aer.uncorrectable_masked,
+        "correctable_masked": aer.correctable_masked,
+        "fatal_errors": aer.fatal_errors,
+        "first_error_pointer": aer.first_error_pointer,
+        "severity_is_spec_default": aer.severity_is_spec_default,
+        "header_log": aer.header_log,
+        "header_log_wire_bytes": aer.header_log_wire_bytes.hex(),
+        "tlp_prefix_log": aer.tlp_prefix_log,
+        "registers": [asdict(r) for r in aer.registers],
+    }
+
+
+def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None, is_root: bool = False) -> dict:
     if ext is None:
         return {"present": False, "entries": [], "notes": ["Vendor ID FFFFh: no Function is present; the chain was not walked"]}
     return {
@@ -195,6 +221,7 @@ def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None) -> dict:
                 "problem": c.problem,
                 "summary": ltr_summary(cs, c) or l1ss_summary(cs, c),
                 "registers": [asdict(r) for r in decode_extended_registers(cs, c)],
+                "aer": aer_as_json(cs, c, is_root) if c.cap_id == 0x0001 else None,
                 "structure_data": c.structure_data.hex(),
             }
             for c in ext.entries
@@ -208,19 +235,19 @@ def cmd_decode(args: argparse.Namespace) -> int:
     # Vendor ID FFFFh means no Function (7.5.1.1.1): the bytes are all ones, so 34h is not a
     # pointer and the walk is skipped.
     chain = walk_standard_caps(cs) if header.function_present else None
-    ext = walk_extended_caps(cs, max_link_width_of(cs, chain)) if header.function_present else None
+    max_width, is_root = pcie_facts(cs, chain)
+    ext = walk_extended_caps(cs, max_width) if header.function_present else None
 
     if args.json:
         # asdict turns the dataclass (and its nested Bit/Bar lists) into plain dicts and lists,
         # the only things json.dumps can write. JSON has no hex literal, so 4318 here is 0x10DE
         # (a choice; hex strings would be the alternative). Properties are not fields, so the
-        # derived names are added by the render module later.
+        # derived values are added by name in the *_as_json helpers.
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
         doc["standard_capabilities"] = chain_as_json(cs, chain)
-        doc["extended_capabilities"] = extended_chain_as_json(cs, ext)
+        doc["extended_capabilities"] = extended_chain_as_json(cs, ext, is_root)
         print(json.dumps(doc, indent=2))
-        print("json: AER registers not built yet (module aer)", file=sys.stderr)
-        return NOT_YET
+        return OK
 
     print("\n".join(describe_source(cs)))
     print(render_header(header))
@@ -235,7 +262,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
         print(render_extended_chain(ext))
         if ext.entries:
             print()
-            print(render_extended_capabilities(cs, ext))
+            print(render_extended_capabilities(cs, ext, is_root))
     if args.annotate and chain is not None:
         print()
         print(render_annotated(cs, chain))
@@ -245,9 +272,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
     if args.hex:  # like lspci -xxxx: the decoded view first, then the raw bytes
         print()
         print(render_hex(cs.data))
-    # Messages about what is missing go to stderr, so stdout stays clean data.
-    print("AER registers: not built yet (module aer)", file=sys.stderr)
-    return NOT_YET
+    return OK
 
 
 def main(argv: list[str] | None = None) -> int:

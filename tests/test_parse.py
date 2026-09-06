@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from pcicfg.cli import NOT_YET, main
+from pcicfg.cli import OK, main
 from pcicfg.parse import (
     ConfigSpace,
     ParseError,
@@ -305,8 +305,8 @@ def test_lspci_answer_key_is_kept():
 
 def test_cli_hex_block_is_lspci_exact(tmp_path, capsys):
     # capsys: pytest captures what the program prints so the test can inspect it.
-    # Exit code is NOT_YET (3) until every decoder module is in; the hex block is final now.
-    assert main(["decode", str(GPU), "--hex"]) == NOT_YET
+    # Exit code is OK now that every decoder module is in.
+    assert main(["decode", str(GPU), "--hex"]) == OK
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("# 01:00.0 VGA compatible controller")
     assert "(lspci text)" in out[1]

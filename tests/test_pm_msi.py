@@ -156,9 +156,9 @@ def test_chain_structure_lengths_include_msi():
 def test_cli_prints_pm_msi_msix_blocks(capsys):
     import json
 
-    from pcicfg.cli import NOT_YET, main
+    from pcicfg.cli import OK, main
 
-    assert main(["decode", str(SSD)]) == NOT_YET
+    assert main(["decode", str(SSD)]) == OK
     out = capsys.readouterr().out
     assert "-- 40h Power Management (ID 01, spec 7.5.2, 8 bytes)  [ahead" in out
     assert "  +02h (42h) PMC                  0013       version 3; PME Clock-; Immediate Readiness on Return to D0+; DSI-; Aux current 0 mA; D1-; D2-; PME from: none" in out
@@ -170,7 +170,7 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert "  +04h (B4h) Table Offset/BIR     00003000   BIR 0 = BAR at 10h, offset 3000h" in out
     assert "  +08h (B8h) PBA Offset/BIR       00002000   BIR 0 = BAR at 10h, offset 2000h" in out
 
-    assert main(["decode", str(GPU)]) == NOT_YET
+    assert main(["decode", str(GPU)]) == OK
     out = capsys.readouterr().out
     assert "  +02h (6Ah) Message Control      0081       Enable+; 1 of 1 vectors (codes 0/0, 2^code); 64-bit Address+" in out
     assert "  +04h (6Ch) Message Address      fee00d58" in out
@@ -178,7 +178,7 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert "  +0Ch (74h) Message Data         0000       low 16 bits of the DWORD; high 16 bits 0000: not Extended Message Data Capable" in out
     assert "  +02h (62h) PMC                  4803       version 3; PME Clock-; Immediate Readiness on Return to D0-; DSI-; Aux current 0 mA; D1-; D2-; PME from: D0, D3hot" in out
 
-    assert main(["decode", str(SSD), "--json"]) == NOT_YET
+    assert main(["decode", str(SSD), "--json"]) == OK
     doc = json.loads(capsys.readouterr().out)
     entries = doc["standard_capabilities"]["entries"]
     assert entries[0]["decoded"]["version"] == 3 and entries[0]["decoded"]["immediate_readiness"] is True
@@ -187,14 +187,14 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert entries[2]["decoded"]["link_summary"] == "Speed 16 GT/s, Width x4"  # PCI Express: module 5
     assert entries[3]["decoded"]["table_size_code"] == 16 and entries[3]["decoded"]["table_size"] == 17
 
-    assert main(["decode", str(GPU), "--json"]) == NOT_YET
+    assert main(["decode", str(GPU), "--json"]) == OK
     doc = json.loads(capsys.readouterr().out)
     msi = doc["standard_capabilities"]["entries"][1]["decoded"]
     assert msi["full_address"] == 0x00000000FEE00D58 and msi["vectors_enabled"] == 1
 
 
 def test_cli_flags_a_structure_that_does_not_fit(capsys, tmp_path):
-    from pcicfg.cli import NOT_YET, main
+    from pcicfg.cli import OK, main
 
     # Re-point the PCI Express entry's next pointer (byte 71h) at F8h and put an MSI-X header
     # there: only 8 bytes remain before 100h, and the structure needs 12.
@@ -203,7 +203,7 @@ def test_cli_flags_a_structure_that_does_not_fit(capsys, tmp_path):
     data[0xF8:0xFC] = bytes.fromhex("11 00 10 80")
     p = tmp_path / "msix_tail.bin"
     p.write_bytes(bytes(data))
-    assert main(["decode", str(p)]) == NOT_YET
+    assert main(["decode", str(p)]) == OK
     out = capsys.readouterr().out
     assert "-- F8h MSI-X (ID 11, spec 7.7.2)" in out
     assert "[problem: structure 12 bytes runs past the end of the PCI-compatible space (100h); only 8 bytes are there]" in out

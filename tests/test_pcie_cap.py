@@ -211,9 +211,9 @@ def test_chain_knows_the_pcie_structure_length():
 def test_cli_prints_the_pcie_capability(capsys):
     import json
 
-    from pcicfg.cli import NOT_YET, main
+    from pcicfg.cli import OK, main
 
-    assert main(["decode", str(GPU)]) == NOT_YET
+    assert main(["decode", str(GPU)]) == OK
     out = capsys.readouterr().out
     assert "-- 78h PCI Express (ID 10, spec 7.5.3, 60 bytes: version 2, Legacy PCI Express Endpoint)" in out
     assert "  Link: Speed 2.5 GT/s (downgraded), Width x16" in out
@@ -224,7 +224,7 @@ def test_cli_prints_the_pcie_capability(capsys):
     assert "  +14h (8Ch) Slot Capabilities    00000000   spec 7.5.3.9; ports with slots / Root Ports only; reads zero on this Function" in out
     assert "  +2Ah (A2h) Device Status 2      0000       spec 7.5.3.17; placeholder register, RsvdZ" in out
 
-    assert main(["decode", str(SSD), "--json"]) == NOT_YET
+    assert main(["decode", str(SSD), "--json"]) == OK
     doc = json.loads(capsys.readouterr().out)
     pcie = doc["standard_capabilities"]["entries"][2]["decoded"]
     assert pcie["link_summary"] == "Speed 16 GT/s, Width x4" and pcie["speed_downgraded"] is False

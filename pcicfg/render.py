@@ -13,6 +13,7 @@ always visible (lspci omits a zero revision); and the second DWORD of a
 Offsets and pointers print the way the spec writes them, "B4h", uppercase.
 """
 
+from .aer import Aer, decode_aer
 from .caps import PCI_COMPATIBLE_END, Capability, CapabilityChain
 from .extcaps import (
     EXTENDED_END,
@@ -387,7 +388,26 @@ def render_extended_chain(chain: ExtendedChain) -> str:
     return "\n".join(lines)
 
 
-def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain) -> str:
+def render_aer(aer: Aer) -> list[str]:
+    """AER (module 7): a one-line health summary, every register, and the Header Log as
+    lspci prints it (four DWORDs, header byte 0 in the top byte of the first, 7.8.4.8)."""
+    lines = [f"  summary: {aer.summary}"]
+    if not aer.severity_is_spec_default:
+        lines.append("  note: Uncorrectable Error Severity differs from the spec 5.0 default 00462030h (Table 7-102)")
+    for r in aer.registers:
+        lines += render_register_lines(aer.offset, r)
+        if r.key == "caps_control":
+            log = " ".join(f"{dw:08x}" for dw in aer.header_log)
+            lines.append(_rline(aer.offset, 0x1C, "Header Log", "", f"{log}  (four DWORDs; header byte 0 is the top byte of the first, 7.8.4.8; spec 7.8.4.8)"))
+    if not aer.is_root:
+        lines.append(_rline(aer.offset, 0x2C, "Root Error regs", "", "2Ch-37h: Root Ports and Root Complex Event Collectors only; read zero on this Function"))
+    if aer.tlp_prefix_log is not None:
+        log = " ".join(f"{dw:08x}" for dw in aer.tlp_prefix_log)
+        lines.append(_rline(aer.offset, 0x38, "TLP Prefix Log", "", f"{log}  (spec 7.8.4.12)"))
+    return lines
+
+
+def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain, is_root: bool = False) -> str:
     """Every extended capability: header line, decoded registers where this tool has them,
     otherwise the header and up to 64 bytes of the structure, printed from 00."""
     lines = []
@@ -400,7 +420,10 @@ def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain) -> str:
         if c.problem:
             lines.append(f"  [problem: {c.problem}]")
         if c.cap_id == 0x0001:
-            lines.append("  registers: not built yet (module aer)")
+            if c.span < 0x2C:
+                lines.append(f"  [problem: only {c.span} bytes before the next start; AER needs 44]")
+                continue
+            lines += render_aer(decode_aer(cs, c.offset, is_root))
             continue
         summary = ltr_summary(cs, c) or l1ss_summary(cs, c)
         if summary:

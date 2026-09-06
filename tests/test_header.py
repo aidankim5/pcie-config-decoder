@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from pcicfg.cli import NOT_YET, main
+from pcicfg.cli import OK, main
 from pcicfg.header import (
     Type0Header,
     Type1Header,
@@ -301,14 +301,14 @@ def test_render_header_ssd_lines(ssd):
 
 def test_cli_decode_prints_header_then_says_what_is_missing(capsys):
     # capsys is a fixture pytest supplies; readouterr() returns what was printed to stdout and stderr.
-    assert main(["decode", str(SSD)]) == NOT_YET
+    assert main(["decode", str(SSD)]) == OK
     captured = capsys.readouterr()
     assert "Non-Volatile memory controller (NVM Express): Samsung" in captured.out
-    assert "not built yet" in captured.err
+    assert captured.err == ""
 
 
 def test_cli_json_has_header(capsys):
-    assert main(["decode", str(GPU), "--json"]) == NOT_YET
+    assert main(["decode", str(GPU), "--json"]) == OK
     doc = json.loads(capsys.readouterr().out)
     assert doc["header"]["vendor_id"] == 0x10DE
     assert doc["header"]["bars"][1]["address"] == 0x4000000000

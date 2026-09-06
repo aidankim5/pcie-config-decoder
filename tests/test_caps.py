@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from pcicfg.caps import MAX_HOPS, walk_standard_caps
-from pcicfg.cli import NOT_YET, main
+from pcicfg.cli import OK, main
 from pcicfg.parse import ConfigSpace, load_config_space
 from pcicfg.render import render_annotated, render_chain
 
@@ -221,11 +221,11 @@ def test_render_annotated_ssd_pm_is_8_bytes_inside_a_16_byte_span():
 
 
 def test_cli_prints_chain_and_json_carries_it(capsys):
-    assert main(["decode", str(SSD), "--annotate"]) == NOT_YET
+    assert main(["decode", str(SSD), "--annotate"]) == OK
     out = capsys.readouterr().out
     assert "  B0h  ID 11  MSI-X" in out
     assert "^^ 40h: Power Management (ID 01, next 50h)" in out
-    assert main(["decode", str(GPU), "--json"]) == NOT_YET
+    assert main(["decode", str(GPU), "--json"]) == OK
     doc = json.loads(capsys.readouterr().out)
     entries = doc["standard_capabilities"]["entries"]
     assert [e["offset"] for e in entries] == [0x60, 0x68, 0x78, 0xB4]
@@ -236,4 +236,4 @@ def test_cli_prints_chain_and_json_carries_it(capsys):
 def test_json_for_absent_function_says_why_the_chain_is_missing(tmp_path):
     p = tmp_path / "ff.bin"
     p.write_bytes(bytes([0xFF] * 256))
-    assert main(["decode", str(p), "--json"]) == NOT_YET
+    assert main(["decode", str(p), "--json"]) == OK
