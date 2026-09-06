@@ -1,0 +1,8 @@
+# Source and docs: stored LF, checked out LF on every OS (Python and lspci text are LF-native).
+* text=auto eol=lf
+
+# Fixtures are evidence: never convert their bytes.
+tests/fixtures/** -text
+
+# Screenshots
+*.png -text
