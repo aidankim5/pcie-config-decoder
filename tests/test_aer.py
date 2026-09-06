@@ -36,7 +36,8 @@ def test_gpu_aer_at_420h_acceptance():
     assert aer.register("caps_control").raw == 0 and aer.first_error_pointer == 0
     assert aer.header_log == [0, 0, 0, 0]
     assert aer.tlp_prefix_log is None and aer.structure_length == 0x2C
-    assert aer.summary == "uncorrectable errors logged: none; correctable errors logged: Advisory Non-Fatal Error; first error pointer bit 0"
+    # No uncorrectable error is logged, so the First Error Pointer is stale and is not printed.
+    assert aer.summary == "uncorrectable errors logged: none; correctable errors logged: Advisory Non-Fatal Error"
 
 
 def test_ssd_aer_at_100h_acceptance():
@@ -60,7 +61,10 @@ def test_register_texts_read_like_the_spec():
     assert sev.field("Data Link Protocol Error").text == "fatal"
     assert sev.field("Poisoned TLP Received").text == "non-fatal"
     mask = aer.register("ce_mask")
-    assert mask.field("Advisory Non-Fatal Error").text == "masked (not logged, not reported)"
+    # 7.8.4.6 says a masked correctable error is not REPORTED; it says nothing about recording,
+    # and this dump proves the difference: the status bit is set while the mask bit is too.
+    assert mask.field("Advisory Non-Fatal Error").text == "masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)"
+    assert aer.register("ce_status").is_set("Advisory Non-Fatal Error")
     assert mask.field("Bad TLP").text == "reported"
     assert aer.register("ce_status").field("Advisory Non-Fatal Error").text.startswith("+")
 
@@ -80,17 +84,21 @@ def test_header_log_byte_order_follows_7_8_4_8():
 def test_root_registers_and_tlp_prefix_log():
     data = bytearray(load_config_space(GPU).data)
     data[0x420 + 0x18] = 0x00
-    data[0x420 + 0x19] = 0x08  # caps_control bit 11: TLP Prefix Log Present
+    data[0x420 + 0x19] = 0x08  # caps_control bit 11: the logged prefix is valid (not what sizes the structure)
     data[0x420 + 0x2C] = 0x07  # Root Error Command: all three enables
     data[0x420 + 0x30] = 0x81  # Root Error Status: ERR_COR Received, ECS = 01b (SIG_SFW)
     data[0x420 + 0x34 : 0x420 + 0x38] = bytes.fromhex("08 01 10 02")  # ERR_COR source 0108h (01:01.0), fatal source 0210h
     data[0x420 + 0x38 : 0x420 + 0x3C] = bytes.fromhex("78 56 34 12")
-    aer = decode_aer(ConfigSpace(bytes(data)), 0x420, is_root=True)
+    # e2e_prefix is Device Capabilities 2 bit 21 (7.5.3.15): what makes 38h-47h exist.
+    aer = decode_aer(ConfigSpace(bytes(data)), 0x420, is_root=True, e2e_prefix=True)
     assert aer.structure_length == 0x48 and aer.tlp_prefix_log[0] == 0x12345678
+    # Without it the register is not read, whatever bit 11 says.
+    assert decode_aer(ConfigSpace(bytes(data)), 0x420, is_root=True).tlp_prefix_log is None
     assert aer.register("root_error_command").is_set("Fatal Error Reporting Enable")
     status = aer.register("root_error_status")
     assert status.is_set("ERR_COR Received") and status.field("ERR_COR Subclass").text == "ECS SIG_SFW"
     src = aer.register("error_source_id")
     assert src.field("ERR_COR Source Identification").text == "0108h"
     assert src.field("ERR_FATAL/NONFATAL Source Identification").text == "0210h"
-    assert aer_structure_length(0, is_root=True) == 0x38 and aer_structure_length(0, is_root=False) == 0x2C
+    assert aer_structure_length(True, False) == 0x38 and aer_structure_length(False, False) == 0x2C
+    assert aer_structure_length(False, True) == 0x48  # the prefix log pulls in everything before it

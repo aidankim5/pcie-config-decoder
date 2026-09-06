@@ -23,10 +23,18 @@ from pathlib import Path
 
 from .aer import ROOT_PORT_TYPES, decode_aer
 from .caps import Capability, CapabilityChain, walk_standard_caps
-from .extcaps import ExtendedChain, decode_extended_registers, l1ss_summary, ltr_summary, walk_extended_caps
+from .extcaps import ExtendedCapability, ExtendedChain, decode_extended_registers, l1ss_summary, ltr_summary, walk_extended_caps
 from .header import decode_header
 from .msi import decode_msi, decode_msix
-from .parse import ConfigSpace, ParseError, decode_text, load_config_space, looks_like_lspci_text, parse_lspci_all
+from .parse import (
+    ConfigSpace,
+    ParseError,
+    decode_text,
+    load_config_space,
+    looks_like_lspci_text,
+    parse_lspci_all,
+    skipped_lspci_blocks,
+)
 from .pcie_cap import decode_pcie_capability
 from .pm import decode_power_management
 from .render import (
@@ -178,26 +186,32 @@ def chain_as_json(cs: ConfigSpace, chain: CapabilityChain | None) -> dict:
     }
 
 
-def pcie_facts(cs: ConfigSpace, chain: CapabilityChain | None) -> tuple[int | None, bool]:
-    """(Maximum Link Width, is this a Root Port or Event Collector) from the PCI Express capability.
+def pcie_facts(cs: ConfigSpace, chain: CapabilityChain | None) -> tuple[int | None, bool, bool]:
+    """Three facts the extended capabilities need, all read from the PCI Express capability.
 
-    The width sizes the per-lane extended structures; the port type says whether
-    AER's Root Error registers apply.
+    (Maximum Link Width, is this a Root Port or Event Collector, End-End TLP
+    Prefix Supported). The width sizes the per-lane extended structures
+    (7.7.3.4, 7.7.5.9, 7.7.7.4); the port type says whether AER's Root Error
+    registers at 2Ch-37h apply (7.8.4); Device Capabilities 2 bit 21 (7.5.3.15)
+    says whether AER's TLP Prefix Log at 38h-47h exists.
     """
     if chain is None:
-        return None, False
+        return None, False, False
     pcie = chain.find(0x10)
-    if pcie is None or pcie.structure_length is None or pcie.span < pcie.structure_length:
-        return None, False
-    p = decode_pcie_capability(cs, pcie.offset)
+    if pcie is None or pcie.structure_length is None:
+        return None, False, False
+    p = decode_pcie_capability(cs, pcie.offset, limit=pcie.span if pcie.span < pcie.structure_length else None)
     width = p.max_link_width if p.has_link_registers else None
-    return width, p.device_port_type in ROOT_PORT_TYPES
+    prefix = bool(p.value_or_none("device_capabilities_2", "End-End TLP Prefix Supported"))
+    return width, p.device_port_type in ROOT_PORT_TYPES, prefix
 
 
-def aer_as_json(cs: ConfigSpace, c, is_root: bool) -> dict | None:
+def aer_as_json(cs: ConfigSpace, c: ExtendedCapability, is_root: bool, e2e_prefix: bool = False) -> dict | None:
+    """The AER structure (spec 7.8.4, extended capability ID 0001h) as a dict, or None when the
+    dump holds fewer than the 44 bytes AER needs; the text view prints a [problem] line instead."""
     if c.span < 0x2C:
         return None
-    aer = decode_aer(cs, c.offset, is_root)
+    aer = decode_aer(cs, c.offset, is_root, e2e_prefix)
     return {
         "summary": aer.summary,
         "uncorrectable_errors": aer.uncorrectable_errors,
@@ -214,7 +228,10 @@ def aer_as_json(cs: ConfigSpace, c, is_root: bool) -> dict | None:
     }
 
 
-def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None, is_root: bool = False) -> dict:
+def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None, is_root: bool = False,
+                           e2e_prefix: bool = False) -> dict:
+    """The extended capability chain (spec 7.6, from 100h) as a dict: the walker's notes, then
+    one entry per header with its decoded registers and, for ID 0001h, the AER document."""
     if ext is None:
         return {"present": False, "entries": [], "notes": ["Vendor ID FFFFh: no Function is present; the chain was not walked"]}
     return {
@@ -234,7 +251,7 @@ def extended_chain_as_json(cs: ConfigSpace, ext: ExtendedChain | None, is_root: 
                 "problem": c.problem,
                 "summary": ltr_summary(cs, c) or l1ss_summary(cs, c),
                 "registers": [asdict(r) for r in decode_extended_registers(cs, c)],
-                "aer": aer_as_json(cs, c, is_root) if c.cap_id == 0x0001 else None,
+                "aer": aer_as_json(cs, c, is_root, e2e_prefix) if c.cap_id == 0x0001 else None,
                 "structure_data": c.structure_data.hex(),
             }
             for c in ext.entries
@@ -253,8 +270,8 @@ def decode_document(cs: ConfigSpace) -> dict:
     """
     header = decode_header(cs)
     chain = walk_standard_caps(cs) if header.function_present else None
-    max_width, is_root = pcie_facts(cs, chain)
-    ext = walk_extended_caps(cs, max_width) if header.function_present else None
+    max_width, is_root, e2e_prefix = pcie_facts(cs, chain)
+    ext = walk_extended_caps(cs, max_width, is_root, e2e_prefix) if header.function_present else None
     return {
         "source": cs.source,
         "bdf": cs.bdf,
@@ -263,7 +280,7 @@ def decode_document(cs: ConfigSpace) -> dict:
         "frame": cs.frame,
         "header": asdict(header),
         "standard_capabilities": chain_as_json(cs, chain),
-        "extended_capabilities": extended_chain_as_json(cs, ext, is_root),
+        "extended_capabilities": extended_chain_as_json(cs, ext, is_root, e2e_prefix),
     }
 
 
@@ -274,8 +291,8 @@ def render_device(cs: ConfigSpace, annotate: bool = False, hex_dump: bool = Fals
     # Vendor ID FFFFh means no Function (7.5.1.1.1): the bytes are all ones, so 34h is not a
     # pointer and the walk is skipped.
     chain = walk_standard_caps(cs) if header.function_present else None
-    max_width, is_root = pcie_facts(cs, chain)
-    ext = walk_extended_caps(cs, max_width) if header.function_present else None
+    max_width, is_root, e2e_prefix = pcie_facts(cs, chain)
+    ext = walk_extended_caps(cs, max_width, is_root, e2e_prefix) if header.function_present else None
 
     parts = ["\n".join(describe_source(cs)), render_header(header)]
     if chain is not None:
@@ -285,7 +302,7 @@ def render_device(cs: ConfigSpace, annotate: bool = False, hex_dump: bool = Fals
     if ext is not None:
         parts.append(render_extended_chain(ext))
         if ext.entries:
-            parts.append(render_extended_capabilities(cs, ext, is_root))
+            parts.append(render_extended_capabilities(cs, ext, is_root, e2e_prefix))
     if annotate and chain is not None:
         parts.append(render_annotated(cs, chain))
         if ext is not None and ext.present:
@@ -310,13 +327,20 @@ def cmd_all(args: argparse.Namespace) -> int:
     """Every device in a full `lspci -vvv -xxxx` listing, one after another (or a JSON list)."""
     text = Path(args.file).read_bytes()
     decoded = decode_text(text)
-    if decoded is None or not looks_like_lspci_text(decoded):
-        raise ParseError(f"{args.file}: not an lspci text listing")
+    if decoded is None:
+        raise ParseError(f"{args.file}: not text this tool can read (not UTF-8, and no UTF-16 byte order mark)")
+    if not looks_like_lspci_text(decoded):
+        raise ParseError(f"{args.file}: not an lspci text listing (no hex rows like '00: de 10 89 24'; `lspci -vvv -xxxx` writes them, and -xxxx needs root)")
     devices = parse_lspci_all(decoded, source=str(args.file))
+    # A block lspci wrote without hex rows is skipped, and named on stderr: a silent skip
+    # would read as "that device is not in the file".
+    skipped = skipped_lspci_blocks(decoded)
     if not devices:
         raise ParseError(f"{args.file}: no device with hex rows found")
     if args.json:
         print(json.dumps([decode_document(cs) for cs in devices], indent=2))
+        for line in skipped:
+            print(f"# skipped, no hex rows: {line}", file=sys.stderr)
         return OK
     for n, cs in enumerate(devices):
         if n:
@@ -325,6 +349,8 @@ def cmd_all(args: argparse.Namespace) -> int:
             print()
         print(render_device(cs))
     print(f"\n# {len(devices)} device(s) decoded from {args.file}", file=sys.stderr)
+    for line in skipped:
+        print(f"# skipped, no hex rows: {line}", file=sys.stderr)
     return OK
 
 

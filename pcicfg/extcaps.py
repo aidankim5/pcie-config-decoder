@@ -23,10 +23,12 @@ Spec:
 
 Frame: this chain exists only in the 4096-byte ECAM frame (7.2.2). A
 256-byte dump cannot contain it; the walker says so instead of guessing.
-A DWORD of FFFFFFFFh at 100h is what a Function without extended
-configuration space returns for every read there (and FFFFh is the RCRB
-absence marker in 7.6.2); the tool treats it as "no extended capabilities"
-too, as the brief asks. That second rule is a choice.
+A DWORD of FFFFFFFFh at 100h is not a spec-defined marker the way 00000000h
+is (7.6.1). It is what a read that nothing answers returns on this bus, and
+what lspci shows for a Function with no extended configuration space; 7.6.2
+uses FFFFh the same way for an absent RCRB. The tool treats it as "no
+extended capabilities" as the brief asks. That second rule is a choice, and
+the reason is a convention of the bus, not a sentence in 7.6.
 
 Guards are choices, not spec, and say what they protect against.
 """
@@ -34,6 +36,7 @@ Guards are choices, not spec, and say what they protect against.
 from dataclasses import dataclass
 
 from . import ids
+from .aer import aer_structure_length  # AER's size rule lives with AER (7.8.4)
 from .header import bit, bits
 from .parse import ConfigSpace
 from .pcie_cap import Register, hex_text, make_register, reserved_text, speeds_vector_text
@@ -91,13 +94,23 @@ def read_extended_header(cs: ConfigSpace, offset: int) -> tuple[int, int, int, i
     return raw, bits(raw, 15, 0), bits(raw, 19, 16), bits(raw, 31, 20)
 
 
-def walk_extended_caps(cs: ConfigSpace, max_link_width: int | None = None) -> ExtendedChain:
+def walk_extended_caps(cs: ConfigSpace, max_link_width: int | None = None, is_root: bool = False,
+                       e2e_prefix: bool = False) -> ExtendedChain:
     """Spec 7.6.1 and 7.6.3: follow the headers from 100h until a next offset of 000h.
 
-    max_link_width (from the PCI Express capability) sizes the per-lane
-    structures (Secondary PCIe, Physical Layer 16 GT/s, Lane Margining).
-    Stops, with a note, on an offset below 100h, an unaligned offset, an
-    offset past the dump, a revisit (loop), or more than 64 hops.
+    Three facts come from the same Function's PCI Express capability and only
+    size structures here: max_link_width sizes the per-lane structures
+    (Secondary PCIe, Physical Layer 16 GT/s, Lane Margining); is_root (Root
+    Port or Event Collector) and e2e_prefix (Device Capabilities 2 bit 21)
+    size AER.
+
+    Stops, with a note, on an offset below 100h, an offset past the dump, a
+    revisit (loop), or more than 64 hops. An offset with its reserved low two
+    bits set is masked to a DWORD boundary and followed, with a note: those
+    bits are RsvdP, so a Function is not entitled to put a structure there,
+    and masking is what Linux and lspci do (& 0xFFC). The standard chain in
+    caps.py stops instead, because a byte pointer there has no reserved bits
+    to excuse: that difference is a choice, and both say what they did.
     """
     chain = ExtendedChain(present=cs.size > EXTENDED_START, entries=[], notes=[])
     if not chain.present:
@@ -139,11 +152,11 @@ def walk_extended_caps(cs: ConfigSpace, max_link_width: int | None = None) -> Ex
             break
         ptr = nxt_masked
 
-    chain.entries = _build_entries(cs, found, max_link_width)
+    chain.entries = _build_entries(cs, found, max_link_width, is_root, e2e_prefix)
     return chain
 
 
-def _build_entries(cs, found, max_link_width) -> list[ExtendedCapability]:
+def _build_entries(cs, found, max_link_width, is_root=False, e2e_prefix=False) -> list[ExtendedCapability]:
     starts = sorted(off for off, *_ in found)  # address order; *_ swallows the other tuple items
     entries = []
     for off, raw, cap_id, version, nxt in found:
@@ -162,10 +175,14 @@ def _build_entries(cs, found, max_link_width) -> list[ExtendedCapability]:
             data=cs.bytes_at(off, span),
         )
         if cap_id == 0:
-            cap.problem = "ID 0000h is only valid as the empty-list header at 100h (7.6.1)"
+            # 7.6.1 gives 0000h only as "no extended capabilities" in the first header at 100h;
+            # it names no meaning for a 0000h header reached from a next pointer.
+            cap.problem = ("ID 0000h with a next pointer that reached it: 7.6.1 defines 0000h only as the "
+                           "empty-list header at 100h" if off != EXTENDED_START else
+                           "ID 0000h at 100h means no extended capabilities (7.6.1)")
         elif cap_id == 0xFFFF:
             cap.problem = "ID FFFFh: reads like an absent device"
-        cap.structure_length = structure_length(cs, cap, max_link_width)
+        cap.structure_length = structure_length(cs, cap, max_link_width, is_root, e2e_prefix)
         if cap.structure_length is not None and cap.structure_length > span:
             where = f"the next capability at {end:03X}h" if later else "the end of the dump"
             cap.problem = f"structure {cap.structure_length} bytes runs past {where}; only {span} bytes are there"
@@ -173,33 +190,43 @@ def _build_entries(cs, found, max_link_width) -> list[ExtendedCapability]:
     return entries
 
 
-def structure_length(cs: ConfigSpace, cap: ExtendedCapability, max_link_width: int | None) -> int | None:
+# Structures whose size the spec's own figure fixes, whatever the Function: capability ID -> bytes.
+FIXED_SIZES = {
+    0x0003: 0x0C,  # Device Serial Number (7.9.3 Figure 7-159)
+    0x0004: 0x10,  # Power Budgeting (7.8.1 Figure 7-108)
+    0x000E: 0x08,  # ARI (7.8.7 Figure 7-136)
+    0x000F: 0x08,  # ATS (Address Translation Services, ATS spec Figure 2-1)
+    0x0018: 0x08,  # LTR (7.8.2 Figure 7-112)
+    0x0025: 0x0C,  # Data Link Feature (7.7.4 Figure 7-79)
+}
+
+
+def structure_length(cs: ConfigSpace, cap: ExtendedCapability, max_link_width: int | None,
+                     is_root: bool = False, e2e_prefix: bool = False) -> int | None:
     """The structure's size when the spec fixes it, a field declares it, or the lane count sets it.
 
-    Fixed (from each capability's layout figure): Power Budgeting 10h (7.8.1
-    Figure 7-108), LTR 08h (7.8.2 Figure 7-112), Data Link Feature 0Ch (7.7.4),
-    L1 PM Substates 10h for version 1 and 14h for version 2 (7.8.3.1), Device
-    Serial Number 0Ch, ARI 08h, ATS 08h. Declared: Vendor-Specific from its
-    VSEC Length (7.9.5.2). AER: 2Ch, plus 0Ch of Root Error registers on Root
-    Ports / Event Collectors, plus 10h of TLP Prefix Log when present (7.8.4).
-    Per lane: Secondary PCIe 0Ch + 2 bytes per lane (7.7.3.4), Physical Layer
-    16 GT/s 20h + 1 byte per lane in whole DWORDs (7.7.5.9), Lane Margining
-    08h + 4 bytes per lane (7.7.7.4). Unknown: None, and the span is shown.
+    Fixed: see FIXED_SIZES. Declared: Vendor-Specific from its VSEC Length
+    (7.9.5.2). By version: L1 PM Substates 10h for version 1, 14h for version 2
+    (7.8.3.1). AER (7.8.4 Figure 7-122): 2Ch, 38h on a Root Port or Event
+    Collector, 48h when End-End TLP Prefix Supported - the same rule as
+    aer.aer_structure_length, which this calls. Per lane: Secondary PCIe
+    0Ch + 2 bytes per lane (7.7.3.4), Physical Layer 16 GT/s 20h + 1 byte per
+    lane in whole DWORDs (7.7.5.9), Lane Margining 08h + 4 bytes per lane
+    (7.7.7.4). Unknown: None, and the span is shown instead.
     """
     off = cap.offset
-    fixed = {0x0004: 0x10, 0x0018: 0x08, 0x0025: 0x0C, 0x0003: 0x0C, 0x000E: 0x08, 0x000F: 0x08}
-    if cap.cap_id in fixed:
-        return fixed[cap.cap_id]
+    if cap.cap_id in FIXED_SIZES:
+        return FIXED_SIZES[cap.cap_id]
     if cap.cap_id == 0x001E:
         return 0x10 if cap.version < 2 else 0x14
     if cap.cap_id == 0x000B and cap.span >= 8:
-        return bits(cs.u32(off + 0x04), 31, 20)  # VSEC Length
-    if cap.cap_id == 0x0001 and cap.span >= 0x1C:
-        caps_control = cs.u32(off + 0x18)
-        length = 0x2C
-        if bit(caps_control, 11):  # TLP Prefix Log Present (7.8.4.7)
-            length = 0x48  # Root Error registers 2Ch-37h are then also inside the structure
-        return length
+        declared = bits(cs.u32(off + 0x04), 31, 20)  # VSEC Length (7.9.5.2)
+        if declared < 8:
+            cap.problem = f"VSEC Length {declared} is smaller than the 8 bytes of its own two headers (7.9.5.2)"
+            return None
+        return declared
+    if cap.cap_id == 0x0001:
+        return aer_structure_length(is_root, e2e_prefix)
     if max_link_width:
         if cap.cap_id == 0x0019:
             return 0x0C + 2 * max_link_width
@@ -219,7 +246,7 @@ POWER_BUDGET_RAIL = {0: "12 V", 1: "3.3 V", 2: "1.5 V or 1.8 V", 7: "thermal"}
 POWER_SCALE = {0: "1.0x", 1: "0.1x", 2: "0.01x", 3: "0.001x"}
 PM_STATE = {0: "D0", 1: "D1", 2: "D2", 3: "D3 (D3cold if Type is Auxiliary or PME Aux, else D3hot)"}
 POWER_BUDGET_DATA = [
-    (7, 0, "Base Power", lambda v: f"{v}" + (" (F0h-F2h = 250/275/300 W at scale 1.0x)" if v >= 0xF0 else ""), "Watts = Base Power x Data Scale"),
+    (7, 0, "Base Power", str, "Watts = Base Power x Data Scale, except the F0h-F2h codes at scale 1.0x"),
     (9, 8, "Data Scale", POWER_SCALE),
     (12, 10, "PM Sub State", lambda v: "default" if v == 0 else f"device specific {v}"),
     (14, 13, "PM State", PM_STATE),

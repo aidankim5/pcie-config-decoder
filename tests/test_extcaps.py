@@ -13,6 +13,7 @@ from pcicfg.extcaps import (
     ltr_summary,
     walk_extended_caps,
 )
+from pcicfg.cli import OK, main
 from pcicfg.parse import ConfigSpace, load_config_space
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -228,3 +229,47 @@ def test_header_only_capabilities_have_no_registers():
     chain = walk_extended_caps(cs, 16)
     assert decode_extended_registers(cs, chain.find(0x0002)) == []  # Virtual Channel: ahead
     assert decode_extended_registers(cs, chain.find(0x0015)) == []  # Resizable BAR: ahead
+
+
+# --- modules 6-8 review fixes -----------------------------------------------------------
+
+def test_aer_size_follows_port_type_and_prefix_support_not_a_status_bit():
+    """The review's finding: bit 11 of Advanced Error Capabilities and Control is error state
+    (is the logged prefix valid), not layout. What sizes AER is the Device/Port Type and
+    Device Capabilities 2 bit 21."""
+    data = bytearray(load_config_space(GPU).data)
+    data[0x420 + 0x19] = 0x08  # caps_control bit 11 set: must not change the size
+    cs = ConfigSpace(bytes(data))
+    assert walk_extended_caps(cs, 16).find(0x0001).structure_length == 0x2C
+    assert walk_extended_caps(cs, 16, is_root=True).find(0x0001).structure_length == 0x38
+    assert walk_extended_caps(cs, 16, e2e_prefix=True).find(0x0001).structure_length == 0x48
+
+
+def test_root_port_chain_line_and_block_agree(tmp_path, capsys):
+    """A Root Port's AER prints Root Error registers at +2Ch..+37h, so the chain line and the
+    block heading must say 56 bytes, not 44."""
+    data = bytearray(load_config_space(GPU).data)
+    data[0x7A] = 0x42  # PCI Express Capabilities: version 2, Root Port
+    p = tmp_path / "rootport.bin"
+    p.write_bytes(bytes(data))
+    assert main(["decode", str(p)]) == OK
+    out = capsys.readouterr().out
+    assert "structure 56 bytes (by port type and End-End TLP Prefix Supported" in out
+    assert "-- 420h AER (Advanced Error Reporting) (ID 0001 v2, header 60020001, 56 bytes)" in out
+    assert "+2Ch (44Ch) Root Error Command" in out
+
+
+def test_vsec_length_below_its_own_headers_is_flagged():
+    data = bytearray(load_config_space(GPU).data)
+    data[0x604 + 3] = 0x00  # VSEC Length (bits 31:20) -> 0
+    data[0x604 + 2] = 0x10  # keep VSEC Rev 1, length nibble 0
+    cap = walk_extended_caps(ConfigSpace(bytes(data)), 16).find(0x000B)
+    assert cap.structure_length is None and "smaller than the 8 bytes" in cap.problem
+
+
+def test_header_only_capabilities_say_header_only_and_are_tagged_ahead(capsys):
+    assert main(["decode", str(GPU)]) == OK
+    out = capsys.readouterr().out
+    line = [ln for ln in out.splitlines() if ln.startswith("-- 100h Virtual Channel")][0]
+    assert "[ahead: decoded by the tool, not yet worked through by hand]" in line
+    assert "header only; first 64 bytes of" in out

@@ -394,12 +394,14 @@ def ext_span_text(c: ExtendedCapability) -> str:
 
 def ext_structure_text(c: ExtendedCapability) -> str:
     if c.structure_length is None:
-        return "structure size: not known to this tool"
+        return "structure size: not known to this tool (the span above is the address gap, not a size)"
     if c.cap_id == 0x000B:
         return f"structure {c.structure_length} bytes (VSEC Length, declared)"
     if c.cap_id in (0x0019, 0x0026, 0x0027):
         return f"structure {c.structure_length} bytes (from the lane count)"
-    return f"structure {c.structure_length} bytes (spec layout)"
+    if c.cap_id == 0x0001:
+        return f"structure {c.structure_length} bytes (by port type and End-End TLP Prefix Supported; a choice, see aer.py)"
+    return f"structure {c.structure_length} bytes (the capability's own figure)"
 
 
 def render_extended_chain(chain: ExtendedChain) -> str:
@@ -429,16 +431,17 @@ def render_aer(aer: Aer) -> list[str]:
         lines += render_register_lines(aer.offset, r, pad=pad)
         if r.key == "caps_control":
             log = " ".join(f"{dw:08x}" for dw in aer.header_log)
-            lines.append(_rline(aer.offset, 0x1C, "Header Log", "", f"{log}  (four DWORDs; header byte 0 is the top byte of the first, 7.8.4.8; spec 7.8.4.8)", pad))
+            lines.append(_rline(aer.offset, 0x1C, "Header Log", "", f"{log}  spec 7.8.4.8; four DWORDs, header byte 0 in the top byte of the first", pad))
     if not aer.is_root:
-        lines.append(_rline(aer.offset, 0x2C, "Root Error regs", "", "2Ch-37h: Root Ports and Root Complex Event Collectors only; read zero on this Function", pad))
+        lines.append(_rline(aer.offset, 0x2C, "Root Error regs", "", "2Ch-37h: spec 7.8.4.9-7.8.4.11, Root Ports and Root Complex Event Collectors only, so not read here", pad))
     if aer.tlp_prefix_log is not None:
         log = " ".join(f"{dw:08x}" for dw in aer.tlp_prefix_log)
-        lines.append(_rline(aer.offset, 0x38, "TLP Prefix Log", "", f"{log}  (spec 7.8.4.12)", pad))
+        lines.append(_rline(aer.offset, 0x38, "TLP Prefix Log", "", f"{log}  spec 7.8.4.12", pad))
     return lines
 
 
-def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain, is_root: bool = False) -> str:
+def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain, is_root: bool = False,
+                                 e2e_prefix: bool = False) -> str:
     """Every extended capability: header line, decoded registers where this tool has them,
     otherwise the header and up to 64 bytes of the structure, printed from 00."""
     lines = []
@@ -454,7 +457,7 @@ def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain, is_root:
             if c.span < 0x2C:
                 lines.append(f"  [problem: only {c.span} bytes before the next start; AER needs 44]")
                 continue
-            lines += render_aer(decode_aer(cs, c.offset, is_root))
+            lines += render_aer(decode_aer(cs, c.offset, is_root, e2e_prefix))
             continue
         summary = ltr_summary(cs, c) or l1ss_summary(cs, c)
         if summary:
@@ -465,8 +468,11 @@ def render_extended_capabilities(cs: ConfigSpace, chain: ExtendedChain, is_root:
             for r in regs:
                 lines += render_register_lines(c.offset, r, pad=name_pad(registers))
         else:
+            # 64 bytes is a choice: enough to see the shape of a structure this tool does not decode,
+            # short enough that a 1000h-long one does not fill the screen.
             shown = c.structure_data[:64]
-            lines.append(f"  header only; first {len(shown)} bytes of the structure, printed from 00 (add {c.offset:03X}h for the absolute offset):")
+            what = "structure" if c.structure_length is not None else f"{c.span} bytes up to the next capability"
+            lines.append(f"  header only; first {len(shown)} bytes of the {what}, printed from 00 (add {c.offset:03X}h for the absolute offset):")
             lines.append(render_hex_rebased(shown, c.offset))
             if len(shown) < len(c.structure_data):
                 lines.append(f"   + {len(c.structure_data) - len(shown)} more bytes not shown (see --hex)")

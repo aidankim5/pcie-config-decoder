@@ -227,8 +227,10 @@ def parse_lspci_block(block: str, source: str = "") -> ConfigSpace:
 def parse_lspci_all(text: str, source: str = "") -> list[ConfigSpace]:
     """Every device in a full `lspci -vvv -xxxx` listing, in file order.
 
-    A block with no hex rows (a device lspci could not read) has nothing to
-    parse and is skipped rather than aborting the whole file.
+    A block with no hex rows (a device lspci could not read, because -xxxx
+    without root prints none) has nothing to parse and is skipped rather than
+    aborting the whole file. Use skipped_lspci_blocks to name what was skipped:
+    a silent skip would read as "that device is not in the file".
     """
     devices = []
     for block in split_lspci_blocks(text):
@@ -236,6 +238,12 @@ def parse_lspci_all(text: str, source: str = "") -> list[ConfigSpace]:
             continue
         devices.append(parse_lspci_block(block, source))
     return devices
+
+
+def skipped_lspci_blocks(text: str) -> list[str]:
+    """The first line of every block parse_lspci_all had to skip, for an honest report."""
+    return [block.splitlines()[0].strip() for block in split_lspci_blocks(text)
+            if not looks_like_lspci_text(block) and block.strip()]
 
 
 def decode_text(raw: bytes) -> str | None:

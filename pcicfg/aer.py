@@ -16,14 +16,17 @@ Layout (7.8.4 Figure 7-122), offsets relative to the capability's start:
   +18h Advanced Error Capabilities and Control (7.8.4.7, Table 7-105)
   +1Ch Header Log, four DWORDs          (7.8.4.8, Table 7-106, Figure 7-130)
   +2Ch Root Error Command               (7.8.4.9)   Root Ports and Root Complex
-  +30h Root Error Status                (7.8.4.10)  Event Collectors only; read
-  +34h Error Source Identification      (7.8.4.11)  zero on other Functions
-  +38h TLP Prefix Log, four DWORDs      (7.8.4.12)  only when TLP Prefix Log Present
+  +30h Root Error Status                (7.8.4.10)  Event Collectors only (7.8.4);
+  +34h Error Source Identification      (7.8.4.11)  not implemented elsewhere
+  +38h TLP Prefix Log, four DWORDs      (7.8.4.12)  only when Device Capabilities 2
+                                                    End-End TLP Prefix Supported is set
 
 The three uncorrectable registers share one bit layout, and so do the two
-correctable ones; each is written once below and reused, which is exactly
-how the spec presents them. A set bit means: Status, the error happened;
-Mask, the error is not reported; Severity, the error is reported as fatal.
+correctable ones; each is written once below and reused. That is a choice of
+this tool: the spec prints a separate figure and table per register, with the
+same bit positions and different per-bit wording. A set bit means: Status,
+the error happened; Mask, the error is not reported (and for uncorrectable
+errors, not recorded either); Severity, the error is reported as fatal.
 
 Header Log byte order (7.8.4.8, quoted): "byte 0 of the header is located in
 byte 3 of the Header Log Register, byte 1 of the header is in byte 2 ... and
@@ -58,8 +61,24 @@ UNCORRECTABLE_BITS = [
     (25, "TLP Prefix Blocked Error"),
     (26, "Poisoned TLP Egress Blocked"),
 ]
-UNCORRECTABLE_RESERVED = [(0, 0, "Undefined (was Link Training Error)", reserved_text), (3, 1, "Reserved", reserved_text),
-                          (11, 6, "Reserved", reserved_text), (31, 27, "Reserved", reserved_text)]
+def undefined_text(v: int) -> str:
+    """Bit 0 of the three uncorrectable registers: 'the value read from this bit is undefined'
+    (7.8.4.2-7.8.4.4). Not a reserved bit, so a 1 there is not a fault to report."""
+    return "0 (undefined, ignore)" if v == 0 else f"{v:x}h (undefined, ignore: it was Link Training Error in an older spec)"
+
+
+def _ue_reserved(kind: str) -> list[tuple]:
+    """The unnamed ranges of the uncorrectable registers: RsvdZ in Status, RsvdP in Mask and Severity."""
+    return [(0, 0, "Undefined (was Link Training Error)", undefined_text),
+            (3, 1, kind, reserved_text), (11, 6, kind, reserved_text), (31, 27, kind, reserved_text)]
+
+
+def _ce_reserved(kind: str) -> list[tuple]:
+    return [(5, 1, kind, reserved_text), (11, 9, kind, reserved_text), (31, 16, kind, reserved_text)]
+
+
+UNCORRECTABLE_RESERVED_Z = _ue_reserved("RsvdZ")
+UNCORRECTABLE_RESERVED_P = _ue_reserved("RsvdP")
 
 # Bit positions shared by Correctable Error Status / Mask (Tables 7-103, 7-104).
 CORRECTABLE_BITS = [
@@ -72,7 +91,8 @@ CORRECTABLE_BITS = [
     (14, "Corrected Internal Error"),
     (15, "Header Log Overflow"),
 ]
-CORRECTABLE_RESERVED = [(5, 1, "Reserved", reserved_text), (11, 9, "Reserved", reserved_text), (31, 16, "Reserved", reserved_text)]
+CORRECTABLE_RESERVED_Z = _ce_reserved("RsvdZ")
+CORRECTABLE_RESERVED_P = _ce_reserved("RsvdP")
 
 # Spec 5.0 default of the Severity register: bits 4, 5, 13, 17, 18, 22 set = 00462030h (Table 7-102).
 SEVERITY_DEFAULT = 0x00462030
@@ -84,19 +104,26 @@ def error_layout(named: list[tuple[int, str]], reserved: list[tuple], fmt, note:
     return sorted(rows, key=lambda row: row[1])  # by low bit, so the rows print in register order
 
 
-STATUS_TEXT = {0: "-", 1: "+ (error occurred; RW1CS, write 1 to clear)"}
-MASK_TEXT = {0: "reported", 1: "masked (not logged, not reported)"}
+STATUS_TEXT = {0: "-", 1: "+ error occurred (write 1 to clear)"}
+# The two mask registers do NOT mean the same thing, and the GPU fixture shows the difference:
+# its Correctable Error Status has Advisory Non-Fatal Error set while that bit is masked.
+# 7.8.4.3, uncorrectable: "A masked error ... is not recorded or reported in the Header Log,
+# TLP Prefix Log, or First Error Pointer, and is not reported to the ... Root Complex."
+# 7.8.4.6, correctable: "A masked error ... is not reported to the ... Root Complex" - that is
+# all it says, so the status bit is still set and the error is still counted.
+UE_MASK_TEXT = {0: "reported", 1: "masked (not reported, and not recorded in the Header Log or First Error Pointer; 7.8.4.3)"}
+CE_MASK_TEXT = {0: "reported", 1: "masked (not reported to the Root Complex; the status bit is still set, 7.8.4.6)"}
 SEVERITY_TEXT = {0: "non-fatal", 1: "fatal"}
 
-UE_STATUS = error_layout(UNCORRECTABLE_BITS, UNCORRECTABLE_RESERVED, STATUS_TEXT, "RW1CS")
-UE_MASK = error_layout(UNCORRECTABLE_BITS, UNCORRECTABLE_RESERVED, MASK_TEXT, "RWS")
-UE_SEVERITY = error_layout(UNCORRECTABLE_BITS, UNCORRECTABLE_RESERVED, SEVERITY_TEXT, "RWS")
-CE_STATUS = error_layout(CORRECTABLE_BITS, CORRECTABLE_RESERVED, STATUS_TEXT, "RW1CS")
-CE_MASK = error_layout(CORRECTABLE_BITS, CORRECTABLE_RESERVED, MASK_TEXT, "RWS")
+UE_STATUS = error_layout(UNCORRECTABLE_BITS, UNCORRECTABLE_RESERVED_Z, STATUS_TEXT, "RW1CS")
+UE_MASK = error_layout(UNCORRECTABLE_BITS, UNCORRECTABLE_RESERVED_P, UE_MASK_TEXT, "RWS")
+UE_SEVERITY = error_layout(UNCORRECTABLE_BITS, UNCORRECTABLE_RESERVED_P, SEVERITY_TEXT, "RWS")
+CE_STATUS = error_layout(CORRECTABLE_BITS, CORRECTABLE_RESERVED_Z, STATUS_TEXT, "RW1CS")
+CE_MASK = error_layout(CORRECTABLE_BITS, CORRECTABLE_RESERVED_P, CE_MASK_TEXT, "RWS")
 
 # 7.8.4.7 Table 7-105, Advanced Error Capabilities and Control, offset 18h.
 CAPS_CONTROL = [
-    (4, 0, "First Error Pointer", lambda v: f"bit {v} of Uncorrectable Error Status", "meaningful while that status bit is set (an inference from 7.8.4.7 and 6.2)"),
+    (4, 0, "First Error Pointer", lambda v: f"bit {v} of Uncorrectable Error Status", "ROS; meaningful only while that status bit is set, which bit 11's own wording implies"),
     (5, 5, "ECRC Generation Capable", None),
     (6, 6, "ECRC Generation Enable", None),
     (7, 7, "ECRC Check Capable", None),
@@ -133,19 +160,28 @@ ROOT_ERROR_STATUS = [
 ERROR_SOURCE_ID = [
     (15, 0, "ERR_COR Source Identification", hex_text(16), "Requester ID of the last ERR_COR"),
     (31, 16, "ERR_FATAL/NONFATAL Source Identification", hex_text(16), "Requester ID of the first ERR_FATAL/NONFATAL"),
+    # Bit 11 says the LOGGED PREFIX IS VALID, not that the register exists: whether 38h-47h are
+    # implemented is Device Capabilities 2 bit 21, End-End TLP Prefix Supported (7.5.3.15).
 ]
 
 ROOT_PORT_TYPES = {4, 10}  # Root Port, Root Complex Event Collector (7.5.3.2)
 
 
-def aer_structure_length(caps_control: int, is_root: bool) -> int:
-    """Bytes in the structure: 2Ch for a non-root Function, 38h with the Root Error registers,
-    48h when the TLP Prefix Log is present (7.8.4 Figure 7-122).
+def aer_structure_length(is_root: bool, e2e_prefix: bool) -> int:
+    """Bytes in the structure (7.8.4 Figure 7-122): 2Ch, 38h, or 48h.
 
-    A choice, like the other structure sizes: the spec draws the whole figure
-    for every Function and says which registers are reserved where.
+    2Ch on an ordinary Function; 38h on a Root Port or Root Complex Event
+    Collector, which are the only Functions the Root Error registers at
+    2Ch-37h apply to; 48h when Device Capabilities 2 says End-End TLP Prefix
+    Supported (7.5.3.15), which is what makes the TLP Prefix Log at 38h-47h
+    exist. Note what does NOT set the size: bit 11 of Advanced Error
+    Capabilities and Control says the logged prefix is valid right now, which
+    is error state, not layout.
+
+    A choice, like the other structure sizes: the spec draws one figure for
+    every Function and says which registers apply where.
     """
-    if bit(caps_control, 11):  # TLP Prefix Log Present: the log at 38h exists, so everything before it too
+    if e2e_prefix:  # the log at 38h exists, so every register before it does too
         return 0x48
     return 0x38 if is_root else 0x2C
 
@@ -157,7 +193,8 @@ class Aer:
     is_root: bool  # Root Port or Event Collector: the Root Error registers apply
     registers: list[Register]
     header_log: list[int]  # four DWORDs at +1Ch, each read little-endian
-    tlp_prefix_log: list[int] | None  # four DWORDs at +38h when TLP Prefix Log Present
+    tlp_prefix_log: list[int] | None  # four DWORDs at +38h when End-End TLP Prefix Supported
+    e2e_prefix: bool = False  # Device Capabilities 2 bit 21: the TLP Prefix Log at 38h exists
 
     def register(self, key: str) -> Register:
         for r in self.registers:
@@ -196,7 +233,8 @@ class Aer:
 
     @property
     def severity_is_spec_default(self) -> bool:
-        return self.register("ue_severity").raw == SEVERITY_DEFAULT
+        """True when the Severity register matches 00462030h, ignoring bit 0, which is undefined."""
+        return (self.register("ue_severity").raw & ~1) == (SEVERITY_DEFAULT & ~1)
 
     @property
     def header_log_wire_bytes(self) -> bytes:
@@ -205,18 +243,33 @@ class Aer:
 
     @property
     def structure_length(self) -> int:
-        return aer_structure_length(self.register("caps_control").raw, self.is_root)
+        return aer_structure_length(self.is_root, self.e2e_prefix)
 
     @property
     def summary(self) -> str:
-        """The two lines of a fleet health check: what happened, and what would be fatal."""
+        """One line for a fleet health check: which errors are logged, and where the first one is.
+
+        The First Error Pointer is only printed when an uncorrectable error is
+        actually logged: with none logged the field is stale, and "bit 0" would
+        read as a finding rather than as an empty register.
+        """
         ue = ", ".join(self.uncorrectable_errors) or "none"
         ce = ", ".join(self.correctable_errors) or "none"
-        return f"uncorrectable errors logged: {ue}; correctable errors logged: {ce}; first error pointer bit {self.first_error_pointer}"
+        text = f"uncorrectable errors logged: {ue}; correctable errors logged: {ce}"
+        if self.uncorrectable_errors:
+            text += f"; first error pointer bit {self.first_error_pointer}"
+        return text
 
 
-def decode_aer(cs: ConfigSpace, offset: int, is_root: bool = False) -> Aer:
-    """Spec 7.8.4: every AER register at absolute `offset`; Root Error registers only when is_root."""
+def decode_aer(cs: ConfigSpace, offset: int, is_root: bool = False, e2e_prefix: bool = False) -> Aer:
+    """Spec 7.8.4: every AER register at absolute `offset`.
+
+    is_root (a Root Port or Root Complex Event Collector) brings in the Root
+    Error registers at 2Ch-37h; e2e_prefix (Device Capabilities 2 bit 21,
+    End-End TLP Prefix Supported, 7.5.3.15) brings in the TLP Prefix Log at
+    38h. Both come from the PCI Express capability of the same Function, so
+    the caller reads them there and passes them in.
+    """
     header = cs.u32(offset)
     caps_control = cs.u32(offset + 0x18)
     regs = [
@@ -235,7 +288,9 @@ def decode_aer(cs: ConfigSpace, offset: int, is_root: bool = False) -> Aer:
             make_register("error_source_id", "Error Source Identification", "7.8.4.11", 0x34, 32, cs.u32(offset + 0x34), ERROR_SOURCE_ID),
         ]
     prefix_log = None
-    if bit(caps_control, 11):
+    if e2e_prefix and offset + 0x48 <= cs.size:
+        # The register exists because DevCap2 says so; bit 11 of caps_control only says whether
+        # what is in it right now belongs to the error the First Error Pointer names.
         prefix_log = [cs.u32(offset + 0x38 + 4 * n) for n in range(4)]
     return Aer(
         offset=offset,
@@ -244,4 +299,5 @@ def decode_aer(cs: ConfigSpace, offset: int, is_root: bool = False) -> Aer:
         registers=regs,
         header_log=header_log,
         tlp_prefix_log=prefix_log,
+        e2e_prefix=e2e_prefix,
     )
