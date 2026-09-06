@@ -19,8 +19,10 @@ from dataclasses import asdict
 
 from .caps import CapabilityChain, walk_standard_caps
 from .header import decode_header
+from .msi import decode_msi, decode_msix
 from .parse import ConfigSpace, ParseError, load_config_space
-from .render import render_annotated, render_chain, render_header, render_hex
+from .pm import decode_power_management
+from .render import render_annotated, render_capabilities, render_chain, render_header, render_hex
 
 OK, BAD_INPUT, NOT_YET = 0, 1, 3  # 2 is taken by argparse
 
@@ -72,7 +74,20 @@ def describe_source(cs: ConfigSpace) -> list[str]:
     return lines
 
 
-def chain_as_json(chain: CapabilityChain | None) -> dict:
+def decoded_capability(cs: ConfigSpace, c) -> dict | None:
+    """The registers of one chain entry as a dict, when a decoder exists and the bytes fit."""
+    decoders = {0x01: (8, decode_power_management), 0x11: (12, decode_msix)}
+    if c.cap_id == 0x05:
+        decoders[0x05] = (c.structure_length or 4, decode_msi)
+    if c.cap_id not in decoders:
+        return None
+    needed, decode = decoders[c.cap_id]
+    if c.span < needed:
+        return {"problem": f"only {c.span} bytes before the next start; the structure needs {needed}"}
+    return asdict(decode(cs, c.offset))
+
+
+def chain_as_json(cs: ConfigSpace, chain: CapabilityChain | None) -> dict:
     """The chain as plain dicts; bytes become hex strings (.hex()), which JSON can carry."""
     if chain is None:
         return {"entries": [], "notes": ["Vendor ID FFFFh: no Function is present (7.5.1.1.1); the chain was not walked"]}
@@ -93,6 +108,7 @@ def chain_as_json(chain: CapabilityChain | None) -> dict:
                 "problem": c.problem,
                 "span_data": c.data.hex(),
                 "structure_data": c.structure_data.hex(),
+                "decoded": decoded_capability(cs, c),  # null until that capability has a decoder
             }
             for c in chain.entries
         ],
@@ -112,9 +128,9 @@ def cmd_decode(args: argparse.Namespace) -> int:
         # (a choice; hex strings would be the alternative). Properties are not fields, so the
         # derived names are added by the render module later.
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
-        doc["standard_capabilities"] = chain_as_json(chain)
+        doc["standard_capabilities"] = chain_as_json(cs, chain)
         print(json.dumps(doc, indent=2))
-        print("json: per-capability decodes not built yet (modules pm, msi, pcie_cap, extcaps, aer)", file=sys.stderr)
+        print("json: PCI Express capability and the extended chain not built yet (modules pcie_cap, extcaps, aer)", file=sys.stderr)
         return NOT_YET
 
     print("\n".join(describe_source(cs)))
@@ -122,6 +138,9 @@ def cmd_decode(args: argparse.Namespace) -> int:
     if chain is not None:
         print()
         print(render_chain(chain))
+        if chain.entries:
+            print()
+            print(render_capabilities(cs, chain))
         if args.annotate:
             print()
             print(render_annotated(cs, chain))
@@ -129,7 +148,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
         print()
         print(render_hex(cs.data))
     # Messages about what is missing go to stderr, so stdout stays clean data.
-    print("per-capability decodes and the extended chain: not built yet (modules pm, msi, pcie_cap, extcaps, aer)", file=sys.stderr)
+    print("PCI Express capability and the extended chain: not built yet (modules pcie_cap, extcaps, aer)", file=sys.stderr)
     return NOT_YET
 
 

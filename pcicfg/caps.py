@@ -40,6 +40,7 @@ from dataclasses import dataclass
 
 from . import ids
 from .header import bit
+from .msi import msi_structure_length
 from .parse import ConfigSpace
 
 FIRST_CAP_OFFSET = 0x40  # the header occupies 00h-3Fh (spec 7.5.1.2), so a capability cannot start below 40h
@@ -48,7 +49,8 @@ MAX_HOPS = 48  # (100h - 40h) / 4: only 48 DWORD-aligned starts exist in 40h-FFh
 
 # Spec-fixed structure sizes, in bytes: PM is 00h-07h (7.5.2 Figure 7-17; the Data byte at 07h
 # is optional but the slot is there), MSI-X is 00h-0Bh (7.7.2 Figure 7-56). Linux pci_regs.h
-# agrees: PCI_PM_SIZEOF 8, PCI_CAP_MSIX_SIZEOF 12.
+# agrees: PCI_PM_SIZEOF 8, PCI_CAP_MSIX_SIZEOF 12. MSI's size depends on two Message Control
+# bits (msi.py); the PCI Express capability's on its version and port type (pcie_cap.py).
 FIXED_STRUCTURE_SIZE = {0x01: 8, 0x11: 12}
 
 
@@ -84,6 +86,9 @@ class Capability:
         """The spec's size of this structure in bytes, when known here; None means its own decoder decides."""
         if self.cap_id == 0x09:
             return self.vendor_specific_length
+        if self.cap_id == 0x05 and len(self.data) >= 4:
+            # bytes 2-3 are Message Control, little-endian (7.7.1.2)
+            return msi_structure_length(int.from_bytes(self.data[2:4], "little"))
         return FIXED_STRUCTURE_SIZE.get(self.cap_id)  # dict.get: None when the ID is not listed
 
     @property

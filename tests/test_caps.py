@@ -41,9 +41,9 @@ def test_gpu_spans_and_structure_lengths():
     chain = walk_standard_caps(load_config_space(GPU))
     # Each span is the gap between two lspci offsets; the last runs to 100h.
     assert [c.span for c in chain.entries] == [0x68 - 0x60, 0x78 - 0x68, 0xB4 - 0x78, 0x100 - 0xB4]
-    # Structure sizes: PM 8 (spec), MSI and PCIe decided by their own registers (None for
-    # now), Vendor Specific declares 14h = 20 (lspci: Len=14).
-    assert [c.structure_length for c in chain.entries] == [8, None, None, 0x14]
+    # Structure sizes: PM 8 (spec), MSI 16 (64-bit address, no masking: Figure 7-45), PCIe
+    # decided by its own registers (None until module 5), Vendor Specific declares 14h = 20.
+    assert [c.structure_length for c in chain.entries] == [8, 16, None, 0x14]
     vs = chain.find(0x09)
     assert vs.vendor_specific_length == 0x14 and vs.problem == ""
     assert len(vs.structure_data) == 20 and len(vs.data) == 76
@@ -64,7 +64,7 @@ def test_ssd_chain_exactly():
     ]
     assert [c.name for c in chain.entries] == ["Power Management", "MSI", "PCI Express", "MSI-X"]
     assert [c.span for c in chain.entries] == [0x50 - 0x40, 0x70 - 0x50, 0xB0 - 0x70, 0x100 - 0xB0]
-    assert [c.structure_length for c in chain.entries] == [8, None, None, 12]  # PM 8, MSI-X 12 (spec)
+    assert [c.structure_length for c in chain.entries] == [8, 16, None, 12]  # PM 8, MSI 16, MSI-X 12
 
 
 def test_taught_tags_follow_claude_md_rule_5():

@@ -13,7 +13,9 @@ Offsets and pointers print the way the spec writes them, "B4h", uppercase.
 
 from .caps import PCI_COMPATIBLE_END, Capability, CapabilityChain
 from .header import ROM_VALIDATION_STATUS, Bar, Bit, CommonHeader, Type0Header, Type1Header
+from .msi import Msi, MsiX, decode_msi, decode_msix
 from .parse import ConfigSpace
+from .pm import PowerManagement, decode_power_management
 
 
 def render_hex(data: bytes, base: int = 0) -> str:
@@ -212,6 +214,8 @@ def structure_text(c: Capability) -> str:
         return "structure size: set by its own registers"
     if c.cap_id == 0x09:
         return f"structure {length} bytes (declared, Table 7-160)"
+    if c.cap_id == 0x05:
+        return f"structure {length} bytes (spec 7.7.1, shape from Message Control)"
     return f"structure {length} bytes (spec)"
 
 
@@ -282,3 +286,117 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
                 "(see the hex rows above)"
             )
     return "\n".join(lines)
+
+
+# --- module 4: Power Management, MSI, MSI-X ----------------------------------------
+
+def plus_minus(flag: bool) -> str:
+    """lspci's convention: '+' when a bit is set, '-' when clear."""
+    return "+" if flag else "-"
+
+
+def _rline(cap_offset: int, rel: int, name: str, raw: str, meaning: str = "") -> str:
+    """One capability register: relative offset first, absolute in parentheses, then raw and meaning."""
+    return f"  +{rel:02X}h ({cap_offset + rel:02X}h) {name:<20} {raw:<10} {meaning}".rstrip()
+
+
+def cap_heading(c: Capability, detail: str) -> str:
+    return f"-- {c.offset:02X}h {c.name} (ID {c.cap_id:02x}, {detail})  {ahead_tag(c)}".rstrip()
+
+
+def render_power_management(pm: PowerManagement) -> list[str]:
+    pme = ", ".join(pm.pme_states) or "none"
+    pmc_meaning = (
+        f"version {pm.version}; PME Clock{plus_minus(pm.pme_clock)}; Immediate Readiness{plus_minus(pm.immediate_readiness)}; "
+        f"DSI{plus_minus(pm.dsi)}; Aux current {pm.aux_current_ma} mA; D1{plus_minus(pm.d1_support)}; "
+        f"D2{plus_minus(pm.d2_support)}; PME from: {pme}"
+    )
+    pmcsr_meaning = (
+        f"{pm.power_state_name}; No Soft Reset{plus_minus(pm.no_soft_reset)}; PME_En{plus_minus(pm.pme_enable)}; "
+        f"Data_Select {pm.data_select} ({pm.data_select_name}); Data_Scale {pm.data_scale} ({pm.data_scale_name}); "
+        f"PME_Status{plus_minus(pm.pme_status)}"
+    )
+    return [
+        _rline(pm.offset, 0x02, "PMC", f"{pm.pmc:04x}", pmc_meaning),
+        _rline(pm.offset, 0x04, "PMCSR", f"{pm.pmcsr:04x}", pmcsr_meaning),
+        _rline(pm.offset, 0x06, "Reserved", f"{pm.reserved_byte:02x}", "bits 5:0 RsvdP, 7:6 undefined (old bridge extensions)"),
+        _rline(pm.offset, 0x07, "Data", f"{pm.data:02x}", "optional; 00 when not implemented"),
+    ]
+
+
+def render_msi(m: Msi) -> list[str]:
+    control = (
+        f"Enable{plus_minus(m.enable)}; {m.vectors_enabled} of {m.vectors_capable} vectors "
+        f"(codes {m.multiple_message_enable}/{m.multiple_message_capable}, 2^code); "
+        f"64-bit Address{plus_minus(m.address_64bit)}; Per-Vector Masking{plus_minus(m.per_vector_masking)}; "
+        f"Extended Message Data capable{plus_minus(m.extended_data_capable)} enable{plus_minus(m.extended_data_enable)}"
+    )
+    lines = [
+        _rline(m.offset, 0x02, "Message Control", f"{m.message_control:04x}", control),
+        _rline(m.offset, 0x04, "Message Address", f"{m.message_address:08x}", "bits 31:2; DWORD aligned"),
+    ]
+    if m.message_upper_address is not None:
+        lines.append(
+            _rline(m.offset, 0x08, "Message Upper Addr", f"{m.message_upper_address:08x}",
+                   f"bits 63:32 -> full address {m.full_address:016x}")
+        )
+    lines.append(
+        _rline(m.offset, m.data_offset, "Message Data", f"{m.message_data:04x}",
+               f"low 16 bits of the DWORD; Extended Message Data (high 16 bits) {m.extended_message_data:04x}")
+    )
+    if m.per_vector_masking:
+        lines.append(_rline(m.offset, m.mask_offset, "Mask Bits", f"{m.mask_bits:08x}", "bit n = vector n masked"))
+        lines.append(_rline(m.offset, m.pending_offset, "Pending Bits", f"{m.pending_bits:08x}", "bit n = vector n pending"))
+    return lines
+
+
+def render_msix(x: MsiX) -> list[str]:
+    def bar_text(bir: int, bar_offset: int | None) -> str:
+        return f"BIR {bir} = BAR at {bar_offset:02X}h" if bar_offset is not None else f"BIR {bir} (reserved code)"
+
+    return [
+        _rline(x.offset, 0x02, "Message Control", f"{x.message_control:04x}",
+               f"Enable{plus_minus(x.enable)}; Function Mask{plus_minus(x.function_mask)}; "
+               f"Table Size code {x.table_size_code} = {x.table_size} entries"),
+        _rline(x.offset, 0x04, "Table Offset/BIR", f"{x.table_register:08x}",
+               f"{bar_text(x.table_bir, x.table_bar_offset)}, offset {x.table_offset:x}h (the table is in memory space)"),
+        _rline(x.offset, 0x08, "PBA Offset/BIR", f"{x.pba_register:08x}",
+               f"{bar_text(x.pba_bir, x.pba_bar_offset)}, offset {x.pba_offset:x}h"),
+    ]
+
+
+def render_capabilities(cs: ConfigSpace, chain: CapabilityChain) -> str:
+    """Every chain entry's registers, in link order; entries without a decoder yet say so."""
+    lines = []
+    for c in chain.entries:
+        lines.append("")
+        if c.cap_id == 0x01:
+            if c.span < 8:
+                lines.append(cap_heading(c, "spec 7.5.2") + f"\n  [problem: only {c.span} bytes before the next start; the structure needs 8]")
+                continue
+            lines.append(cap_heading(c, "spec 7.5.2, 8 bytes"))
+            lines += render_power_management(decode_power_management(cs, c.offset))
+        elif c.cap_id == 0x05:
+            length = c.structure_length or 4
+            if c.span < length:
+                lines.append(cap_heading(c, "spec 7.7.1") + f"\n  [problem: only {c.span} bytes before the next start; the structure needs {length}]")
+                continue
+            m = decode_msi(cs, c.offset)
+            shape = f"{'64' if m.address_64bit else '32'}-bit address, {'with' if m.per_vector_masking else 'no'} per-vector masking"
+            lines.append(cap_heading(c, f"spec 7.7.1, {m.structure_length} bytes: {shape}"))
+            lines += render_msi(m)
+        elif c.cap_id == 0x11:
+            if c.span < 12:
+                lines.append(cap_heading(c, "spec 7.7.2") + f"\n  [problem: only {c.span} bytes before the next start; the structure needs 12]")
+                continue
+            lines.append(cap_heading(c, "spec 7.7.2, 12 bytes"))
+            lines += render_msix(decode_msix(cs, c.offset))
+        elif c.cap_id == 0x10:
+            lines.append(cap_heading(c, "spec 7.5.3") + "\n  registers: not built yet (module pcie_cap)")
+        elif c.cap_id == 0x09:
+            lines.append(cap_heading(c, "spec 7.9.4, vendor-defined bytes after the 3-byte header"))
+            lines.append(render_hex_rebased(c.structure_data, c.offset))
+        else:
+            lines.append(cap_heading(c, "no decoder in this tool") + "\n  bytes only:")
+            lines.append(render_hex_rebased(c.structure_data, c.offset))
+    return "\n".join(lines).lstrip("\n")
