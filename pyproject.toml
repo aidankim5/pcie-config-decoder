@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcicfg"
+version = "0.1.0"
+description = "Read and decode PCI Express configuration space: Type 0 header, capability chains, PCI Express capability, AER."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Aidan Kim" }]
+dependencies = []
+
+[project.scripts]
+pcicfg = "pcicfg.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["pcicfg*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
