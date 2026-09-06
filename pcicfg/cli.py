@@ -373,6 +373,26 @@ def cmd_list(args: argparse.Namespace) -> int:
     return OK
 
 
+def cmd_dump(args: argparse.Namespace) -> int:
+    """Layer 3: raw configuration-space bytes of one Function, or the exact reason there are none.
+
+    The read needs a signed kernel driver (see pcicfg/win/raw.py). When it
+    cannot happen, this prints what was tried, what stopped it and the two
+    other ways to get the same bytes, and exits 3 rather than pretending.
+    """
+    from .win.raw import parse_bdf, probe_pawnio, report  # imported here: Windows only
+
+    try:
+        parse_bdf(args.bdf)
+    except ValueError as e:
+        print(f"pcicfg dump: {e}", file=sys.stderr)
+        return BAD_INPUT
+    print(report(probe_pawnio(), args.bdf))
+    if args.output:
+        print(f"Nothing was written to {args.output}.", file=sys.stderr)
+    return NOT_YET
+
+
 def main(argv: list[str] | None = None) -> int:
     # argv=None means "use the real command line"; tests pass a list instead.
     args = build_parser().parse_args(argv)
@@ -383,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_all(args)
         if args.cmd == "list":
             return cmd_list(args)
+        if args.cmd == "dump":
+            return cmd_dump(args)
         print(f"pcicfg {args.cmd}: not built yet", file=sys.stderr)
         return NOT_YET
     except (ParseError, OSError, IndexError) as e:

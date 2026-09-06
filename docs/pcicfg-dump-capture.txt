@@ -1,0 +1,31 @@
+pcicfg dump 01:00.0: no bytes read.
+
+What this tool tried, and what it found:
+  PawnIOLib.dll   loaded from C:\Program Files\PawnIO\PawnIOLib.dll, driver library version 2.0.0
+  pawnio_open     failed, 0x80070005 (Access is denied)
+  this process    not elevated (run the terminal as Administrator to change this)
+
+Blocked by: pawnio_open returned 0x80070005 (Access is denied); this process is not elevated, and the driver's device object needs an elevated one.
+
+Why a driver at all: reading configuration space means either port I/O to CF8h/CFCh
+(spec 7.2.1, 256 bytes per Function) or mapping the ECAM window in physical memory
+(spec 7.2.2, the full 4096 bytes). Both are ring 0. This project does not enable test
+signing, does not turn off Memory Integrity and does not load an unsigned driver, so a
+signed driver with a signed module is the only route, and no official PawnIO module
+exposes a generic configuration-space read.
+
+Two ways to get the same bytes today:
+
+1. RW-Everything (rweverything.com), a signed Windows tool with its own signed
+   driver. Open it, pick the device in PCI view, and use its per-device save to
+   write a .bin or a text dump. `pcicfg decode <file>` reads either: a raw
+   256- or 4096-byte image, or lspci-style hex rows.
+
+2. An Ubuntu live USB on the same machine, which needs no install:
+       sudo lspci -vvv -xxxx -s 01:00.0 > rtx3060ti_01-00.0.txt
+       sudo cat /sys/bus/pci/devices/0000:01:00.0/config > 01-00.0.config
+   The first is what the fixtures in this repo are. The second is the raw
+   4096-byte ECAM frame. Copy either to Windows and decode it there.
+
+For link speed, width, payload sizes and the AER masks without any dump at all,
+`pcicfg list` reads what Windows already knows (see pcicfg/win/enum.py).
