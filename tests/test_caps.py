@@ -37,12 +37,16 @@ def test_gpu_chain_exactly():
     assert chain.notes == []
 
 
-def test_gpu_spans_and_vendor_specific_length():
+def test_gpu_spans_and_structure_lengths():
     chain = walk_standard_caps(load_config_space(GPU))
-    assert [c.span for c in chain.entries] == [8, 16, 60, 0x100 - 0xB4]
+    # Each span is the gap between two lspci offsets; the last runs to 100h.
+    assert [c.span for c in chain.entries] == [0x68 - 0x60, 0x78 - 0x68, 0xB4 - 0x78, 0x100 - 0xB4]
+    # Structure sizes: PM 8 (spec), MSI and PCIe decided by their own registers (None for
+    # now), Vendor Specific declares 14h = 20 (lspci: Len=14).
+    assert [c.structure_length for c in chain.entries] == [8, None, None, 0x14]
     vs = chain.find(0x09)
-    assert vs.vendor_specific_length == 0x14  # lspci: Vendor Specific Information: Len=14
-    assert vs.problem == ""
+    assert vs.vendor_specific_length == 0x14 and vs.problem == ""
+    assert len(vs.structure_data) == 20 and len(vs.data) == 76
     pcie = chain.find(0x10)
     assert pcie.data[:2] == b"\x10\xb4"  # byte 0 = ID, byte 1 = next: two fields, no flip
     assert pcie.end == 0xB4
@@ -59,11 +63,14 @@ def test_ssd_chain_exactly():
         (0xB0, 0x11, 0x00),
     ]
     assert [c.name for c in chain.entries] == ["Power Management", "MSI", "PCI Express", "MSI-X"]
-    assert [c.span for c in chain.entries] == [16, 32, 64, 0x100 - 0xB0]
+    assert [c.span for c in chain.entries] == [0x50 - 0x40, 0x70 - 0x50, 0xB0 - 0x70, 0x100 - 0xB0]
+    assert [c.structure_length for c in chain.entries] == [8, None, None, 12]  # PM 8, MSI-X 12 (spec)
 
 
 def test_taught_tags_follow_claude_md_rule_5():
     chain = walk_standard_caps(load_config_space(SSD))
+    # {id: taught} for each entry. Expected values come from CLAUDE.md rule 5, not the dump:
+    # MSI (05) and PCI Express (10) are taught; Power Management (01) and MSI-X (11) are ahead.
     assert {c.cap_id: c.taught for c in chain.entries} == {0x01: False, 0x05: True, 0x10: True, 0x11: False}
 
 
@@ -117,6 +124,13 @@ def test_status_bit_4_clear_means_no_walk():
 def test_pointer_zero_is_an_empty_list():
     chain = walk_standard_caps(corrupted(GPU, {0x34: 0x00}))
     assert chain.has_list and chain.entries == [] and chain.notes == []
+    assert "(empty: the Capabilities Pointer is 00h)" in render_chain(chain)
+
+
+def test_pointer_03_masks_to_empty_and_still_says_so():
+    chain = walk_standard_caps(corrupted(GPU, {0x34: 0x03}))
+    text = render_chain(chain)
+    assert "masked to 00h" in text and "(empty: the Capabilities Pointer is 00h)" in text
 
 
 def test_header_only_dump_cannot_be_walked():
@@ -146,11 +160,13 @@ def test_all_48_aligned_slots_walk_without_a_false_loop():
     assert all(c.span == 4 and c.problem == "" for c in chain.entries)
 
 
-def test_bad_ids_are_flagged_not_hidden():
+def test_bad_ids_and_lengths_are_flagged_not_hidden():
     chain = walk_standard_caps(corrupted(GPU, {0x68: 0x00}))  # MSI's ID byte zeroed
     assert chain.find(0x00).problem.startswith("ID 00h")
     chain = walk_standard_caps(corrupted(GPU, {0xB6: 0x60}))  # Vendor Specific length 60h > the 4Ch to 100h
-    assert "runs past" in chain.find(0x09).problem
+    assert "runs past the end of the PCI-compatible space" in chain.find(0x09).problem
+    chain = walk_standard_caps(corrupted(GPU, {0xB6: 0x02}))  # below the 3 header bytes
+    assert "below the 3 header bytes" in chain.find(0x09).problem
 
 
 # --- rendering and CLI ----------------------------------------------------------------
@@ -160,22 +176,48 @@ def test_render_chain_gpu():
     lines = text.splitlines()
     assert lines[0].startswith("Standard capability chain (spec 7.5.1.1.11; Capabilities Pointer 34h = 60h)")
     assert lines[1].startswith("  60h  ID 01  Power Management")
+    assert "8 bytes to the next start at 68h; structure 8 bytes (spec)" in lines[1]
     assert "[ahead" in lines[1]  # PM registers are ahead until decoded by hand
-    assert lines[3].startswith("  78h  ID 10  PCI Express") and "next b4h" in lines[3] and "60 bytes" in lines[3]
+    assert lines[3].startswith("  78h  ID 10  PCI Express") and "next B4h" in lines[3]
+    assert "60 bytes to the next start at B4h; structure size: set by its own registers" in lines[3]
     assert lines[4].startswith("  B4h  ID 09  Vendor Specific (length 14h)") and "end of list" in lines[4]
+    assert "76 bytes to 100h, the end of the PCI-compatible space; structure 20 bytes (declared, Table 7-160)" in lines[4]
 
 
 def test_render_annotated_marks_starts_and_rebases():
     cs = load_config_space(GPU)
     text = render_annotated(cs, walk_standard_caps(cs))
     lines = text.splitlines()
+    assert lines[0].startswith("Annotated PCI-compatible space 00h-FFh")
+    assert "not walked yet [ahead: module extcaps]" in lines[0]  # the GPU dump is 4096 bytes
     row60 = lines.index("60: 01 68 03 48 08 00 00 00 05 78 81 00 58 0d e0 fe")
-    assert lines[row60 + 1] == "    ^^ 60h: Power Management (ID 01, next 68h)"
-    assert lines[row60 + 2] == " " * 28 + "^^ 68h: MSI (ID 05, next 78h)"
-    assert "== 78h PCI Express: 60 bytes, printed from 00 (relative offsets; add 78h for the absolute offset) ==" in lines
-    i = lines.index("== 78h PCI Express: 60 bytes, printed from 00 (relative offsets; add 78h for the absolute offset) ==")
-    assert lines[i + 1] == "00: 10 b4 12 00 e1 8d 2c 11 3f 29 00 00 04 3d 45 00"
-    assert lines[i + 2].startswith("10: 40 01 01 11")  # Link Control 0140 and Link Status 1101 at relative 10h/12h
+    assert lines[row60 + 1] == "    ^^ 60h: Power Management (ID 01, next 68h) [ahead: registers not yet decoded by hand]"
+    # column of byte 8 in the row: 4 characters for "60: " plus 3 per byte x 8 = 28
+    assert lines[row60 + 2] == " " * (4 + 3 * 8) + "^^ 68h: MSI (ID 05, next 78h)"
+    header = "== 78h PCI Express: structure size: set by its own registers; 60 bytes to the next start at B4h; printed from 00 (relative offsets; add 78h for the absolute offset) =="
+    i = lines.index(header)
+    assert lines[i + 1] == "00: 10 b4 12 00 e1 8d 2c 11 3f 29 00 00 04 3d 45 00 | absolute 78h"
+    assert lines[i + 2].startswith("10: 40 01 01 11") and lines[i + 2].endswith("| absolute 88h")
+    # Link Control 0140 and Link Status 1101 sit at relative 10h/12h, absolute 88h/8Ah.
+
+
+def test_render_annotated_vendor_specific_shows_only_its_20_bytes():
+    cs = load_config_space(GPU)
+    lines = render_annotated(cs, walk_standard_caps(cs)).splitlines()
+    i = [k for k, ln in enumerate(lines) if ln.startswith("== B4h Vendor Specific: structure 20 bytes")][0]
+    assert lines[i + 1].startswith("b4: ") is False and lines[i + 1].startswith("00: 09 00 14 01")
+    assert lines[i + 2].startswith("10: 00 00 00 00 ") and "| absolute C4h" in lines[i + 2]
+    assert lines[i + 3] == "   + 56 more bytes up to 100h are not part of this structure (see the hex rows above)"
+    # The MSI-X-shaped bytes at C8h (11 00 05 00 ...) must NOT be printed as Vendor Specific content.
+    assert "11 00 05 00" not in lines[i + 1] and "11 00 05 00" not in lines[i + 2]
+
+
+def test_render_annotated_ssd_pm_is_8_bytes_inside_a_16_byte_span():
+    cs = load_config_space(SSD)
+    lines = render_annotated(cs, walk_standard_caps(cs)).splitlines()
+    i = [k for k, ln in enumerate(lines) if ln.startswith("== 40h Power Management: structure 8 bytes (spec); 16 bytes to the next start at 50h")][0]
+    assert lines[i + 1] == "00: 01 50 13 00 08 00 00 00                         | absolute 40h"
+    assert lines[i + 2].startswith("   + 8 more bytes up to 50h are not part of this structure")
 
 
 def test_cli_prints_chain_and_json_carries_it(capsys):
@@ -187,4 +229,11 @@ def test_cli_prints_chain_and_json_carries_it(capsys):
     doc = json.loads(capsys.readouterr().out)
     entries = doc["standard_capabilities"]["entries"]
     assert [e["offset"] for e in entries] == [0x60, 0x68, 0x78, 0xB4]
-    assert entries[2]["data"].startswith("10b41200")
+    assert entries[2]["span_data"].startswith("10b41200")
+    assert entries[3]["structure_length"] == 0x14 and len(entries[3]["structure_data"]) == 2 * 20
+
+
+def test_json_for_absent_function_says_why_the_chain_is_missing(tmp_path):
+    p = tmp_path / "ff.bin"
+    p.write_bytes(bytes([0xFF] * 256))
+    assert main(["decode", str(p), "--json"]) == NOT_YET

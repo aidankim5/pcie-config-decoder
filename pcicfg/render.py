@@ -8,9 +8,10 @@ offset first, so each line can be found in the hex rows. Two more choices:
 the revision is always printed, even when it is 00, so the byte at 08h is
 always visible (lspci omits a zero revision); and the second DWORD of a
 64-bit BAR is printed on the BAR's own line with its absolute offset.
+Offsets and pointers print the way the spec writes them, "B4h", uppercase.
 """
 
-from .caps import Capability, CapabilityChain
+from .caps import PCI_COMPATIBLE_END, Capability, CapabilityChain
 from .header import ROM_VALIDATION_STATUS, Bar, Bit, CommonHeader, Type0Header, Type1Header
 from .parse import ConfigSpace
 
@@ -19,9 +20,7 @@ def render_hex(data: bytes, base: int = 0) -> str:
     """Bytes, 16 per row, labeled the way `lspci -xxxx` labels them.
 
     `base` is the absolute offset of data[0]. With base=0 on a whole dump this
-    reproduces lspci's hex block byte for byte ("00:" ... "ff0:"). --annotate
-    reuses it with base=0 on a capability's own bytes so that capability
-    reads from 00 again (relative offsets), the way it was taught.
+    reproduces lspci's hex block byte for byte ("00:" ... "ff0:").
     """
     rows = []
     for i in range(0, len(data), 16):  # i = index of each row's first byte: 0, 16, 32, ...
@@ -30,6 +29,19 @@ def render_hex(data: bytes, base: int = 0) -> str:
         # Labels 0x100 and up grow to 3 digits by themselves, matching lspci's "100:" ... "ff0:".
         label = f"{base + i:02x}:"
         rows.append(label + " " + " ".join(f"{b:02x}" for b in chunk))
+    return "\n".join(rows)
+
+
+def render_hex_rebased(data: bytes, start: int) -> str:
+    """A capability's bytes with labels restarting at 00 (relative offsets, the way it was
+    taught), and the absolute offset of each row at the end so nobody has to add by hand.
+    """
+    rows = []
+    for i in range(0, len(data), 16):
+        chunk = data[i : i + 16]
+        body = " ".join(f"{b:02x}" for b in chunk)
+        # :<47 pads a full 16-byte row (47 characters) so the absolute note lines up.
+        rows.append(f"{i:02x}: {body:<47} | absolute {start + i:02X}h")
     return "\n".join(rows)
 
 
@@ -95,7 +107,7 @@ def render_common(h: CommonHeader) -> list[str]:
 def render_tail(h: CommonHeader) -> list[str]:
     cap_note = ""
     if h.capabilities_pointer_raw != h.capabilities_pointer:
-        cap_note = f"-> {h.capabilities_pointer:02x}h (bits 1:0 are reserved, masked off per 7.5.1.1.11)"
+        cap_note = f"-> {h.capabilities_pointer:02X}h (bits 1:0 are reserved, masked off per 7.5.1.1.11)"
     if not h.has_capabilities_list:
         cap_note = (cap_note + " (Status bit 4 clear: no capability list)").strip()
     line_note = ""
@@ -173,28 +185,52 @@ def render_header(h: Type0Header | Type1Header) -> str:
 
 # --- module 3: the standard capability chain -------------------------------------
 
+def ahead_tag(c: Capability) -> str:
+    """'' for a capability Aidan has decoded by hand, else the [ahead] marker (CLAUDE.md rule 5)."""
+    return "" if c.taught else "[ahead: registers not yet decoded by hand]"
+
+
 def describe_capability(c: Capability) -> str:
-    """'Power Management' plus what the header bytes add: a Vendor-Specific length, or a problem."""
+    """'Vendor Specific (length 14h)': the name plus what the header bytes add."""
     text = c.name
     if c.vendor_specific_length is not None:
-        text += f" (length {c.vendor_specific_length:02x}h)"
-    if c.problem:
-        text += f" [problem: {c.problem}]"
+        text += f" (length {c.vendor_specific_length:02X}h)"
     return text
 
 
+def span_text(c: Capability) -> str:
+    """'60 bytes to B4h' or '76 bytes to 100h, the end of the PCI-compatible space'."""
+    if c.end >= PCI_COMPATIBLE_END:
+        return f"{c.span} bytes to 100h, the end of the PCI-compatible space"
+    return f"{c.span} bytes to the next start at {c.end:02X}h"
+
+
+def structure_text(c: Capability) -> str:
+    """'structure 8 bytes' when the spec fixes or the capability declares its size."""
+    length = c.structure_length
+    if length is None:
+        return "structure size: set by its own registers"
+    if c.cap_id == 0x09:
+        return f"structure {length} bytes (declared, Table 7-160)"
+    return f"structure {length} bytes (spec)"
+
+
 def render_chain(chain: CapabilityChain) -> str:
-    """One line per entry, in link order: offset, ID byte, name, next pointer, span, tag."""
+    """One line per entry, in link order: offset, ID byte, name, next pointer, span, structure, tag."""
     lines = [
-        f"Standard capability chain (spec 7.5.1.1.11; Capabilities Pointer 34h = {chain.pointer:02x}h)  [taught]"
+        f"Standard capability chain (spec 7.5.1.1.11; Capabilities Pointer 34h = {chain.pointer:02X}h)  [taught]"
     ]
     for c in chain.entries:
-        end = "end of list" if c.next_pointer == 0 else f"next {c.next_pointer:02x}h"
-        tag = "" if c.taught else "[ahead: registers not yet decoded by hand]"
+        end = "end of list" if c.next_pointer == 0 else f"next {c.next_pointer:02X}h"
+        # :<32 and :<12 pad the name and the next-pointer column so the lines line up
+        # (same idea as :<18 in _line).
         lines.append(
-            f"  {c.offset:02X}h  ID {c.cap_id:02x}  {describe_capability(c):<40} {end:<12} {c.span:3d} bytes to the next start  {tag}".rstrip()
+            f"  {c.offset:02X}h  ID {c.cap_id:02x}  {describe_capability(c):<32} {end:<12} "
+            f"{span_text(c)}; {structure_text(c)}  {ahead_tag(c)}".rstrip()
         )
-    if not chain.entries and not chain.notes:
+        if c.problem:
+            lines.append(f"        [problem: {c.problem}]")
+    if chain.has_list and chain.pointer == 0 and not chain.entries:
         lines.append("  (empty: the Capabilities Pointer is 00h)")
     for note in chain.notes:
         lines.append(f"  note: {note}")
@@ -206,28 +242,43 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
     then every capability printed again from 00 (relative offsets).
 
     A marker line sits under the row: ^^ under the ID byte, then the absolute
-    offset, the name, and the next pointer. In the rebased block the labels
-    restart at 00, so a register at "PCIe capability offset 12h" is on row 10:,
-    third byte; add the capability's start for the absolute offset.
+    offset, the name, and the next pointer. In the rebased blocks the labels
+    restart at 00 and every row ends with its absolute offset, so a register at
+    "PCIe capability offset 12h" is on row 10:, third byte, absolute 8Ah.
     """
-    lines = ["Annotated PCI-compatible space (00h-FFh); the extended space at 100h is the extended chain (extcaps)"]
+    end = min(cs.size, PCI_COMPATIBLE_END)
+    title = f"Annotated PCI-compatible space 00h-{end - 1:02X}h (256-byte frame, spec 7.2.1)"
+    if end < PCI_COMPATIBLE_END:
+        title += "; the dump stops here"
+    elif cs.size > PCI_COMPATIBLE_END:
+        title += "; 100h-FFFh (the extended chain, spec 7.6) is in this dump but not walked yet [ahead: module extcaps]"
+    else:
+        title += "; this dump has no extended space"
+    lines = [title]
+    # A lookup table offset -> Capability, so the loop can ask "does a capability start here?"
     starts = {c.offset: c for c in chain.entries}
-    end = min(cs.size, 0x100)
     for row_start in range(0, end, 16):
-        row = render_hex(cs.data[row_start : row_start + 16], base=row_start)
-        lines.append(row)
+        lines.append(render_hex(cs.data[row_start : row_start + 16], base=row_start))
         for off in range(row_start, row_start + 16):
             if off in starts:
                 c = starts[off]
                 # column of byte k in a row: the "xx: " label is 4 characters, then 3 per byte
                 col = 4 + 3 * (off - row_start)
-                nxt = "end" if c.next_pointer == 0 else f"next {c.next_pointer:02x}h"
-                lines.append(" " * col + f"^^ {off:02X}h: {c.name} (ID {c.cap_id:02x}, {nxt})")
-    for c in sorted(chain.entries, key=lambda c: c.offset):
+                nxt = "end" if c.next_pointer == 0 else f"next {c.next_pointer:02X}h"
+                lines.append(" " * col + f"^^ {off:02X}h: {c.name} (ID {c.cap_id:02x}, {nxt}) {ahead_tag(c)}".rstrip())
+    # Blocks in address order (lowest offset first) so they read top to bottom like the hex
+    # rows; render_chain keeps link order. key=lambda tells sorted which number to compare.
+    for c in sorted(chain.entries, key=lambda cap: cap.offset):
         lines.append("")
         lines.append(
-            f"== {c.offset:02X}h {c.name}: {c.span} bytes, printed from 00 "
-            f"(relative offsets; add {c.offset:02X}h for the absolute offset) =="
+            f"== {c.offset:02X}h {c.name}: {structure_text(c)}; {span_text(c)}; "
+            f"printed from 00 (relative offsets; add {c.offset:02X}h for the absolute offset) == {ahead_tag(c)}".rstrip()
         )
-        lines.append(render_hex(c.data, base=0))
+        lines.append(render_hex_rebased(c.structure_data, c.offset))
+        extra = c.span - len(c.structure_data)
+        if extra > 0:
+            lines.append(
+                f"   + {extra} more bytes up to {c.end:02X}h are not part of this structure "
+                "(see the hex rows above)"
+            )
     return "\n".join(lines)

@@ -113,12 +113,12 @@ TAUGHT_EXTENDED_CAPS = {0x0001}  # AER
 
 def standard_cap_name(cap_id: int) -> str:
     # dict.get(key, default): the value for key, or default when the key is absent (no KeyError).
-    # :#04x = 0x prefix, 4 characters in total, zero-padded: 0x1a; :#06x below gives 0x001a.
-    return STANDARD_CAP_NAMES.get(cap_id, f"unknown capability ID {cap_id:#04x}")
+    # Unknown IDs print the way the spec writes numbers: two hex digits and an h.
+    return STANDARD_CAP_NAMES.get(cap_id, f"unknown capability ID {cap_id:02X}h")
 
 
 def extended_cap_name(cap_id: int) -> str:
-    return EXTENDED_CAP_NAMES.get(cap_id, f"unknown extended capability ID {cap_id:#06x}")
+    return EXTENDED_CAP_NAMES.get(cap_id, f"unknown extended capability ID {cap_id:04X}h")
 
 
 # --- class codes: (base class, sub-class) -> name; a 3-tuple adds the programming interface ---

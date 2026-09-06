@@ -17,7 +17,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from .caps import walk_standard_caps
+from .caps import CapabilityChain, walk_standard_caps
 from .header import decode_header
 from .parse import ConfigSpace, ParseError, load_config_space
 from .render import render_annotated, render_chain, render_header, render_hex
@@ -72,8 +72,10 @@ def describe_source(cs: ConfigSpace) -> list[str]:
     return lines
 
 
-def chain_as_json(chain) -> dict:
-    """The chain as plain dicts; the bytes become a hex string, which JSON can carry."""
+def chain_as_json(chain: CapabilityChain | None) -> dict:
+    """The chain as plain dicts; bytes become hex strings (.hex()), which JSON can carry."""
+    if chain is None:
+        return {"entries": [], "notes": ["Vendor ID FFFFh: no Function is present (7.5.1.1.1); the chain was not walked"]}
     return {
         "pointer_raw": chain.pointer_raw,
         "pointer": chain.pointer,
@@ -85,10 +87,12 @@ def chain_as_json(chain) -> dict:
                 "id": c.cap_id,
                 "name": c.name,
                 "next_pointer": c.next_pointer,
-                "span": c.span,
+                "span": c.span,  # a choice: the address gap to the next start
+                "structure_length": c.structure_length,  # the spec's size when known, else null
                 "taught": c.taught,
                 "problem": c.problem,
-                "data": c.data.hex(),
+                "span_data": c.data.hex(),
+                "structure_data": c.structure_data.hex(),
             }
             for c in chain.entries
         ],
@@ -98,6 +102,8 @@ def chain_as_json(chain) -> dict:
 def cmd_decode(args: argparse.Namespace) -> int:
     cs = load_config_space(args.file)
     header = decode_header(cs)
+    # Vendor ID FFFFh means no Function (7.5.1.1.1): the bytes are all ones, so 34h is not a
+    # pointer and the walk is skipped.
     chain = walk_standard_caps(cs) if header.function_present else None
 
     if args.json:
@@ -106,8 +112,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
         # (a choice; hex strings would be the alternative). Properties are not fields, so the
         # derived names are added by the render module later.
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
-        if chain is not None:
-            doc["standard_capabilities"] = chain_as_json(chain)
+        doc["standard_capabilities"] = chain_as_json(chain)
         print(json.dumps(doc, indent=2))
         print("json: per-capability decodes not built yet (modules pm, msi, pcie_cap, extcaps, aer)", file=sys.stderr)
         return NOT_YET
