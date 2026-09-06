@@ -146,9 +146,9 @@ def test_msix_bir_and_offset_split():
 
 def test_chain_structure_lengths_include_msi():
     gpu = walk_standard_caps(load_config_space(GPU))
-    assert [c.structure_length for c in gpu.entries] == [8, 16, None, 0x14]  # PCIe still None
+    assert [c.structure_length for c in gpu.entries] == [8, 16, 60, 0x14]
     ssd = walk_standard_caps(load_config_space(SSD))
-    assert [c.structure_length for c in ssd.entries] == [8, 16, None, 12]
+    assert [c.structure_length for c in ssd.entries] == [8, 16, 60, 12]
 
 
 # --- rendering and CLI ------------------------------------------------------------------
@@ -184,7 +184,7 @@ def test_cli_prints_pm_msi_msix_blocks(capsys):
     assert entries[0]["decoded"]["version"] == 3 and entries[0]["decoded"]["immediate_readiness"] is True
     assert entries[0]["decoded"]["pme_states"] == [] and entries[0]["decoded"]["power_state_name"] == "D0"
     assert entries[1]["decoded"]["multiple_message_capable"] == 5 and entries[1]["decoded"]["vectors_capable"] == 32
-    assert entries[2]["decoded"] is None  # PCI Express: module 5
+    assert entries[2]["decoded"]["link_summary"] == "Speed 16 GT/s, Width x4"  # PCI Express: module 5
     assert entries[3]["decoded"]["table_size_code"] == 16 and entries[3]["decoded"]["table_size"] == 17
 
     assert main(["decode", str(GPU), "--json"]) == NOT_YET

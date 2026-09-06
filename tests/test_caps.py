@@ -42,8 +42,8 @@ def test_gpu_spans_and_structure_lengths():
     # Each span is the gap between two lspci offsets; the last runs to 100h.
     assert [c.span for c in chain.entries] == [0x68 - 0x60, 0x78 - 0x68, 0xB4 - 0x78, 0x100 - 0xB4]
     # Structure sizes: PM 8 (spec), MSI 16 (64-bit address, no masking: Figure 7-45), PCIe
-    # decided by its own registers (None until module 5), Vendor Specific declares 14h = 20.
-    assert [c.structure_length for c in chain.entries] == [8, 16, None, 0x14]
+    # 60 (version 2), Vendor Specific declares 14h = 20.
+    assert [c.structure_length for c in chain.entries] == [8, 16, 60, 0x14]
     vs = chain.find(0x09)
     assert vs.vendor_specific_length == 0x14 and vs.problem == ""
     assert len(vs.structure_data) == 20 and len(vs.data) == 76
@@ -64,7 +64,7 @@ def test_ssd_chain_exactly():
     ]
     assert [c.name for c in chain.entries] == ["Power Management", "MSI", "PCI Express", "MSI-X"]
     assert [c.span for c in chain.entries] == [0x50 - 0x40, 0x70 - 0x50, 0xB0 - 0x70, 0x100 - 0xB0]
-    assert [c.structure_length for c in chain.entries] == [8, 16, None, 12]  # PM 8, MSI 16, MSI-X 12
+    assert [c.structure_length for c in chain.entries] == [8, 16, 60, 12]  # PM 8, MSI 16, PCIe 60, MSI-X 12
 
 
 def test_taught_tags_follow_claude_md_rule_5():
@@ -179,7 +179,7 @@ def test_render_chain_gpu():
     assert "8 bytes to the next start at 68h; structure 8 bytes (spec)" in lines[1]
     assert "[ahead" in lines[1]  # PM registers are ahead until decoded by hand
     assert lines[3].startswith("  78h  ID 10  PCI Express") and "next B4h" in lines[3]
-    assert "60 bytes to the next start at B4h; structure size: set by its own registers" in lines[3]
+    assert "60 bytes to the next start at B4h; structure 60 bytes (by Capability Version and port type" in lines[3]
     assert lines[4].startswith("  B4h  ID 09  Vendor Specific (length 14h)") and "end of list" in lines[4]
     assert "76 bytes to 100h, the end of the PCI-compatible space; structure 20 bytes (declared, Table 7-160)" in lines[4]
 
@@ -194,7 +194,7 @@ def test_render_annotated_marks_starts_and_rebases():
     assert lines[row60 + 1] == "    ^^ 60h: Power Management (ID 01, next 68h) [ahead: decoded by the tool, not yet worked through by hand]"
     # column of byte 8 in the row: 4 characters for "60: " plus 3 per byte x 8 = 28
     assert lines[row60 + 2] == " " * (4 + 3 * 8) + "^^ 68h: MSI (ID 05, next 78h)"
-    header = "== 78h PCI Express: structure size: set by its own registers; 60 bytes to the next start at B4h; printed from 00 (relative offsets; add 78h for the absolute offset) =="
+    header = "== 78h PCI Express: structure 60 bytes (by Capability Version and port type; a choice following pci_regs.h); 60 bytes to the next start at B4h; printed from 00 (relative offsets; add 78h for the absolute offset) =="
     i = lines.index(header)
     assert lines[i + 1] == "00: 10 b4 12 00 e1 8d 2c 11 3f 29 00 00 04 3d 45 00 | absolute 78h"
     assert lines[i + 2].startswith("10: 40 01 01 11") and lines[i + 2].endswith("| absolute 88h")

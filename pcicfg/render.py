@@ -17,6 +17,7 @@ from .caps import PCI_COMPATIBLE_END, Capability, CapabilityChain
 from .header import ROM_VALIDATION_STATUS, Bar, Bit, CommonHeader, Type0Header, Type1Header
 from .msi import Msi, MsiX, decode_msi, decode_msix
 from .parse import ConfigSpace
+from .pcie_cap import PcieCapability, Register, decode_pcie_capability
 from .pm import PowerManagement, decode_power_management
 
 
@@ -221,6 +222,8 @@ def structure_text(c: Capability) -> str:
         return f"structure {length} bytes (declared, Table 7-160)"
     if c.cap_id == 0x05:
         return f"structure {length} bytes (DWORDs of Figures 7-44 to 7-47 per Message Control; a count, the spec gives no byte size)"
+    if c.cap_id == 0x10:
+        return f"structure {length} bytes (by Capability Version and port type; a choice following pci_regs.h)"
     return f"structure {length} bytes (spec)"
 
 
@@ -291,6 +294,44 @@ def render_annotated(cs: ConfigSpace, chain: CapabilityChain) -> str:
                 "(see the hex rows above)"
             )
     return "\n".join(lines)
+
+
+# --- module 5: the PCI Express capability ----------------------------------------------
+
+def is_reserved_field(name: str) -> bool:
+    return name.startswith(("RsvdP", "RsvdZ", "Undefined"))
+
+
+def render_register(p: PcieCapability, r: Register) -> list[str]:
+    """The register's own line (relative and absolute offset, raw), then one line per field.
+
+    Reserved and undefined fields print only when they are not zero. Slot and
+    Root registers that read zero on a Function that has no slot or is not a
+    Root Port collapse to one line, as do placeholder registers.
+    """
+    digits = r.width // 4  # 4 bits per hex digit
+    head = _rline(p.offset, r.offset, r.name, f"{r.raw:0{digits}x}", f"spec {r.section}")
+    ports_only = r.key.startswith(("slot_", "root_"))
+    if r.raw == 0 and (ports_only or r.key == "device_status_2"):
+        why = "ports with slots / Root Ports only; reads zero on this Function" if ports_only else "placeholder register, RsvdZ"
+        return [head + f"; {why}"]
+    lines = [head]
+    for f in r.fields:
+        if is_reserved_field(f.name) and f.value == 0:
+            continue
+        note = f"  ({f.note})" if f.note else ""
+        # :<6 pads the bit range, :<50 the name, so the value and meaning columns line up.
+        lines.append(f"        {f.bits_label:<6} {f.name:<50} {f.value:<5} {f.text}{note}".rstrip())
+    return lines
+
+
+def render_pcie_capability(p: PcieCapability) -> list[str]:
+    lines = []
+    if p.has_link_registers:
+        lines.append(f"  Link: {p.link_summary}   (lspci's LnkSta line; 'downgraded' = below Link Capabilities)")
+    for r in p.registers:
+        lines += render_register(p, r)
+    return lines
 
 
 # --- module 4: Power Management, MSI, MSI-X ----------------------------------------
@@ -430,7 +471,12 @@ def render_capabilities(cs: ConfigSpace, chain: CapabilityChain) -> str:
             lines.append(cap_heading(c, "spec 7.7.2, 12 bytes"))
             lines += render_msix(decode_msix(cs, c.offset))
         elif c.cap_id == 0x10:
-            lines.append(cap_heading(c, "spec 7.5.3") + "\n  registers: not built yet (module pcie_cap)")
+            if length is None or does_not_fit:
+                lines.append(cap_heading(c, "spec 7.5.3") + f"\n  [problem: {c.problem or 'PCI Express Capabilities register at +02h cannot be read'}]")
+                continue
+            p = decode_pcie_capability(cs, c.offset)
+            lines.append(cap_heading(c, f"spec 7.5.3, {p.structure_length} bytes: version {p.version}, {p.device_port_type_name}"))
+            lines += render_pcie_capability(p)
         elif c.cap_id == 0x09:
             lines.append(cap_heading(c, "spec 7.9.4, vendor-defined bytes after the 3-byte header"))
             lines.append(render_hex_rebased(c.structure_data, c.offset))

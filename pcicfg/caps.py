@@ -27,8 +27,8 @@ Two numbers per entry, and only one of them is spec:
   the capability declares it (Power Management 8 bytes, MSI-X 12 bytes,
   Vendor-Specific from its own Capability Length byte). MSI's comes from its
   Message Control bits through msi.msi_structure_length (a DWORD count off
-  the spec's figures); the PCI Express capability's comes from its own
-  decoder.
+  the spec's figures); the PCI Express capability's from its version and
+  port type through pcie_cap.pcie_structure_length.
 - `span` is a choice: the gap from this entry's start to the next capability
   start in address order (or to 100h). It is how the chain reads by eye,
   "this section starts from 00 and runs until the next one begins", and it
@@ -44,6 +44,7 @@ from . import ids
 from .header import bit
 from .msi import msi_structure_length
 from .parse import ConfigSpace
+from .pcie_cap import pcie_structure_length
 
 FIRST_CAP_OFFSET = 0x40  # the header occupies 00h-3Fh (spec 7.5.1.2), so a capability cannot start below 40h
 PCI_COMPATIBLE_END = 0x100  # one past FFh: where the PCI-compatible 256 bytes stop (spec 7.2.1)
@@ -92,6 +93,9 @@ class Capability:
             # Bytes 2-3 are Message Control (7.7.1.2): the same little-endian flip as
             # ConfigSpace.u16, done on the raw slice because this object holds bytes.
             return msi_structure_length(int.from_bytes(self.data[2:4], "little"))
+        if self.cap_id == 0x10 and len(self.data) >= 4:
+            # Bytes 2-3 are the PCI Express Capabilities register (7.5.3.2): version and type
+            return pcie_structure_length(int.from_bytes(self.data[2:4], "little"))
         return FIXED_STRUCTURE_SIZE.get(self.cap_id)  # dict.get: None when the ID is not listed
 
     @property

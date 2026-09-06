@@ -22,6 +22,7 @@ from .caps import Capability, CapabilityChain, walk_standard_caps
 from .header import decode_header
 from .msi import decode_msi, decode_msix
 from .parse import ConfigSpace, ParseError, load_config_space
+from .pcie_cap import decode_pcie_capability
 from .pm import decode_power_management
 from .render import render_annotated, render_capabilities, render_chain, render_header, render_hex
 
@@ -82,12 +83,33 @@ def decoded_capability(cs: ConfigSpace, c: Capability) -> dict | None:
     built from (table size, vector counts, the 64-bit address, PME states) are
     added by name afterwards.
     """
-    if c.cap_id not in (0x01, 0x05, 0x11):
+    if c.cap_id not in (0x01, 0x05, 0x10, 0x11):
         return None
-    if c.structure_length is None:  # MSI with fewer than 4 bytes: Message Control unreadable
-        return {"problem": f"only {c.span} bytes; Message Control at +02h cannot be read"}
+    if c.structure_length is None:  # fewer than 4 bytes: the register at +02h is unreadable
+        return {"problem": f"only {c.span} bytes; the register at +02h cannot be read"}
     if c.span < c.structure_length:
         return {"problem": c.problem}
+    if c.cap_id == 0x10:
+        p = decode_pcie_capability(cs, c.offset)
+        return {
+            "offset": p.offset,
+            "version": p.version,
+            "device_port_type": p.device_port_type,
+            "device_port_type_name": p.device_port_type_name,
+            "structure_length": p.structure_length,
+            "link_summary": p.link_summary if p.has_link_registers else None,
+            "speed_downgraded": p.speed_downgraded,
+            "width_downgraded": p.width_downgraded,
+            "current_link_speed_code": p.current_link_speed_code,
+            "max_link_speed_code": p.max_link_speed_code,
+            "negotiated_link_width": p.negotiated_link_width,
+            "max_link_width": p.max_link_width,
+            "max_payload_supported_bytes": p.max_payload_supported_bytes,
+            "max_payload_bytes": p.max_payload_bytes,
+            "max_read_request_bytes": p.max_read_request_bytes,
+            "supported_speeds_gts": p.supported_speeds_gts,
+            "registers": [asdict(r) for r in p.registers],
+        }
     if c.cap_id == 0x01:
         pm = decode_power_management(cs, c.offset)
         doc = asdict(pm)
@@ -147,7 +169,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
         doc = {"source": cs.source, "bdf": cs.bdf, "size": cs.size, "header": asdict(header)}
         doc["standard_capabilities"] = chain_as_json(cs, chain)
         print(json.dumps(doc, indent=2))
-        print("json: PCI Express capability and the extended chain not built yet (modules pcie_cap, extcaps, aer)", file=sys.stderr)
+        print("json: the extended chain is not built yet (modules extcaps, aer)", file=sys.stderr)
         return NOT_YET
 
     print("\n".join(describe_source(cs)))
@@ -165,7 +187,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
         print()
         print(render_hex(cs.data))
     # Messages about what is missing go to stderr, so stdout stays clean data.
-    print("PCI Express capability and the extended chain: not built yet (modules pcie_cap, extcaps, aer)", file=sys.stderr)
+    print("the extended chain at 100h: not built yet (modules extcaps, aer)", file=sys.stderr)
     return NOT_YET
 
 
