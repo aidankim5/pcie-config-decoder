@@ -1,6 +1,12 @@
 pcicfg dump 01:00.0: no bytes read.
 
 What this tool tried, and what it found:
+  kldbgdrv.sys    Microsoft's Kernel Local Debugging Driver (the security-on path)
+  debug boot      off, and cannot be turned on: Secure Boot policy protects it
+  Secure Boot     on
+  this process    not elevated
+  kldbgdrv svc    installed
+  device open     [WinError 2] The system cannot find the file specified.
   PawnIOLib.dll   loaded from C:\Program Files\PawnIO\PawnIOLib.dll, driver library version 2.0.0
   pawnio_open     failed, 0x80070005 (Access is denied)
   this process    not elevated (run the terminal as Administrator to change this)
@@ -8,39 +14,48 @@ What this tool tried, and what it found:
   Memory Integrity on (HVCI): a blocklisted driver will not load
   RwDrv.sys        on the active vulnerable-driver blocklist (RW-Everything)
 
-Blocked by: pawnio_open returned 0x80070005 (Access is denied); this process is not elevated, and the driver's device object needs an elevated one.
+Blocked by: kernel debugging is off and Secure Boot policy protects the BCD debug element, so `bcdedit /debug on` is refused outright; this path needs Secure Boot off, which is a bigger weakening than the ones this project refuses (see docs/security-on-path.md).
 
 Why a driver at all: reading configuration space means either port I/O to CF8h/CFCh
 (spec 7.2.1, 256 bytes per Function) or mapping the ECAM window in physical memory
-(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a driver has to do it. The
-third-party drivers that would (RW-Everything's RwDrv.sys and its kin) are on Microsoft's
-vulnerable-driver blocklist and are refused while Memory Integrity is on; PawnIO loads but
-runs only modules its author signed, none of which reads generic config space. A driver
-you write and get signed, or Microsoft's own debug driver via a reboot, would work; both
-are described below.
+(spec 7.2.2, the full 4096 bytes). Both are ring 0, so a driver has to do it. Microsoft's
+own signed kldbgdrv.sys does it with Memory Integrity left on and the vulnerable-driver
+blocklist enforced, which is the route this tool takes first and route 1 below; it needs
+the machine booted with kernel debugging enabled. The third-party drivers that would
+otherwise do it (RW-Everything's RwDrv.sys and its kin) are on that blocklist and are
+refused while Memory Integrity is on; PawnIO loads but runs only modules its author
+signed, none of which reads generic config space.
 
 Ways to get the bytes, best first (verified against Microsoft's docs and
 driver-blocklist, and against each tool's own source):
 
-1. An Ubuntu live USB on the same machine. No install, no Windows changes, and
+1. The security-on path this tool tries first: Microsoft's signed
+   kldbgdrv.sys, which loads with Memory Integrity on and the vulnerable-driver
+   blocklist enforced. It costs one boot-level change, `bcdedit /debug on`, and
+   a reboot -- and it requires Secure Boot to be OFF, because Secure Boot policy
+   protects that BCD element and refuses the change outright. On a Secure Boot
+   machine this route is closed, and turning Secure Boot off is a bigger
+   weakening than the ones this project refuses, so route 2 is the better
+   answer there. docs/security-on-path.md has the measurement and the detail.
+
+2. An Ubuntu live USB on the same machine. No install, no Windows changes, and
    it works whatever this machine's security settings are:
        sudo lspci -vvv -xxxx -s 01:00.0 > rtx3060ti_01-00.0.txt
        sudo cat /sys/bus/pci/devices/0000:01:00.0/config > 01-00.0.config
    The first is what the fixtures in this repo are; the second is the raw
    4096-byte ECAM frame. Copy either to Windows and `pcicfg decode <file>`.
 
-2. RW-Everything (rweverything.com), only on a machine with Memory Integrity
+3. RW-Everything (rweverything.com), only on a machine with Memory Integrity
    off. Its driver RwDrv.sys is on Microsoft's vulnerable-driver blocklist, so
    with Memory Integrity on it is refused at load and neither its GUI nor its
    command line reads a byte. Where it does load, save the device from its PCI
    view and `pcicfg decode <file>`; a PCIe device saves the full 4096 bytes.
+   docs/security-off-path.md writes this route out in full, and says what it
+   costs.
 
-Also possible, and why not here: Windows kernel-debug mode (bcdedit /debug on)
-lets Microsoft's own signed kldbgdrv.sys read config space with no third-party
-driver and Memory Integrity left on, but it is a boot-level change that needs a
-reboot. A driver you write yourself and get attestation-signed by Microsoft
-loads with Memory Integrity on, but signing needs a registered organization and
-an EV certificate (money and weeks). Test signing and loading an unsigned or
+A driver you write yourself and get attestation-signed by Microsoft also loads
+with Memory Integrity on, but signing needs a registered organization and an EV
+certificate (money and weeks). Test signing and loading an unsigned, renamed or
 blocklisted driver are off the table by design.
 
 For link speed, width, payload sizes and the AER masks with no dump and no
