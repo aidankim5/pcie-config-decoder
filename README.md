@@ -20,7 +20,7 @@ where it appears.
 |---|---|---|
 | 1. Decoder core | Decodes a 256- or 4096-byte dump from a file. Standard library only, no OS calls. | `pcicfg/*.py` |
 | 2. Windows enumeration, no driver | `pcicfg list`: every PCI function with link speed, width and payload sizes, from the PnP properties Windows already publishes. | `pcicfg/win/enum.py` |
-| 3. Raw reads on Windows | `pcicfg dump <BDF>`: locates the bytes and reports exactly why a driver is or is not able to read them on this machine (Memory Integrity, the driver blocklist). | `pcicfg/win/raw.py` |
+| 3. Raw reads on Windows | `pcicfg dump <BDF>`: tries Microsoft's signed debug driver, then reports exactly why the bytes can or cannot be read here (Secure Boot, Memory Integrity, the driver blocklist). | `pcicfg/win/raw.py`, `pcicfg/win/kldbg.py` |
 
 Layer 1 is the part that matters and it ships. Layers 2 and 3 are about the
 Windows side of the same question: what can you learn about a link without
@@ -244,7 +244,9 @@ thirty routes against Microsoft's own documentation and driver blocklist. The
 finding is worth stating plainly: **there is no way to read raw config space on
 Windows that keeps every security setting on, needs no driver, and needs no
 reboot.** Every route that returns bytes needs administrator rights plus one of:
-a third-party signed driver, or a boot into kernel-debug mode. There is no
+a third-party signed driver, or a boot into kernel-debug mode. And on a Secure
+Boot machine the second of those is not available either (see route 3 below), so
+on *this* machine there is no route at all that leaves every setting untouched. There is no
 documented user-mode Windows API that hands back a device's raw configuration
 space. That is a real constraint of the platform, not a gap in the tool.
 
@@ -291,9 +293,26 @@ What actually works, and what the report points at:
    this repo were made, and any saved dump goes straight into `pcicfg decode`.
 2. RW-Everything on a machine with Memory Integrity **off**, where its driver
    loads: save the device from its PCI view, then `pcicfg decode <file>`.
-3. Windows kernel-debug mode (`bcdedit /debug on`) lets Microsoft's own signed
-   `kldbgdrv.sys` read config space with no third-party driver and Memory
-   Integrity left on, but it is a boot-level change that needs a reboot.
+3. Windows kernel-debug mode lets Microsoft's own signed `kldbgdrv.sys` read
+   config space with no third-party driver and Memory Integrity left on. I
+   built this path in full (`pcicfg/win/kldbg.py`, `tools/kldbg-setup.ps1`) and
+   it is **closed on this machine** — shut by this project's own rule, which is
+   the interesting part. The driver itself is fine: it extracts from the Windows
+   SDK's `kd.exe`, verifies `Valid` under `Microsoft Code Signing PCA`, is not
+   on the blocklist, and installs. What it cannot get is the boot-level change
+   it depends on, because Secure Boot policy protects the BCD `debug` element:
+
+   ```
+   C:\> bcdedit /debug on
+   An error occurred while attempting to modify the debugger settings.
+   The value is protected by Secure Boot policy and cannot be modified or deleted.
+   ```
+
+   Turning Secure Boot off would open it, and that is a bigger weakening than
+   either setting this project refuses to touch — Memory Integrity's own
+   guarantees are rooted in it — so the answer is no. `pcicfg dump` reads the
+   Secure Boot state itself and reports this without needing administrator
+   rights. See [docs/security-on-path.md](docs/security-on-path.md).
 4. A driver you write yourself, using the documented `IRP_MN_READ_CONFIG` or
    `BUS_INTERFACE_STANDARD.GetBusData` (Microsoft's own PCIDRV sample makes the
    call). It loads with Memory Integrity on, but only once Microsoft has
@@ -391,7 +410,7 @@ py -m pcicfg list
 py -m pytest -q
 ```
 
-171 tests, no dependencies beyond pytest for the tests themselves. Python 3.10
+186 tests, no dependencies beyond pytest for the tests themselves. Python 3.10
 or newer.
 
 ---

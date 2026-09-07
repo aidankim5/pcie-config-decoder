@@ -57,12 +57,14 @@ FRAME_BY_PATH = {
 ALTERNATIVES = """Ways to get the bytes, best first (verified against Microsoft's docs and
 driver-blocklist, and against each tool's own source):
 
-1. The security-on path this tool takes itself: Microsoft's signed
+1. The security-on path this tool tries first: Microsoft's signed
    kldbgdrv.sys, which loads with Memory Integrity on and the vulnerable-driver
    blocklist enforced. It costs one boot-level change, `bcdedit /debug on`, and
-   a reboot. docs/security-on-path.md has the exact commands, the tradeoff that
-   change carries, and how to undo it. When that is set up, `pcicfg dump
-   01:00.0` reads the bytes here, with no third-party driver at all.
+   a reboot -- and it requires Secure Boot to be OFF, because Secure Boot policy
+   protects that BCD element and refuses the change outright. On a Secure Boot
+   machine this route is closed, and turning Secure Boot off is a bigger
+   weakening than the ones this project refuses, so route 2 is the better
+   answer there. docs/security-on-path.md has the measurement and the detail.
 
 2. An Ubuntu live USB on the same machine. No install, no Windows changes, and
    it works whatever this machine's security settings are:

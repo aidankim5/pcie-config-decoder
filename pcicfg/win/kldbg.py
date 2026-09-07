@@ -140,6 +140,32 @@ def kernel_debugger_enabled() -> bool | None:
         return None
 
 
+def secure_boot_enabled() -> bool | None:
+    """Is UEFI Secure Boot on? None when it cannot be read.
+
+    This decides whether this whole path is available, so it is worth reading
+    before anything else is tried. Secure Boot policy protects the BCD `debug`
+    element, so on a Secure Boot machine `bcdedit /debug on` is refused outright:
+
+        The value is protected by Secure Boot policy and cannot be modified or deleted.
+
+    No amount of privilege gets around that; it is settled in firmware. The
+    value is readable without elevation, which is what lets `pcicfg dump` say
+    "this path is closed here" instead of sending someone to a command that
+    cannot work.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\SecureBoot\State") as k:
+            value, _ = winreg.QueryValueEx(k, "UEFISecureBootEnabled")
+            return bool(value)
+    except (OSError, ImportError):
+        return None
+
+
 def enable_debug_privilege() -> bool:
     """Turn on SeDebugPrivilege in this process's token. False when it is not held.
 
@@ -269,6 +295,7 @@ class KldbgStatus:
 
     platform_ok: bool
     debug_boot: bool | None = None  # bcdedit /debug on, as the running kernel reports it
+    secure_boot: bool | None = None  # when on, the debug boot above cannot be turned on at all
     elevated: bool = False
     service_present: bool | None = None
     opened: bool = False
@@ -284,6 +311,12 @@ class KldbgStatus:
         if not self.platform_ok:
             return "kldbgdrv.sys is a Windows driver; this is not Windows"
         if self.debug_boot is False:
+            if self.secure_boot:
+                # Measured on this machine: bcdedit refuses with "The value is protected by
+                # Secure Boot policy and cannot be modified or deleted." Firmware settles it.
+                return ("kernel debugging is off and Secure Boot policy protects the BCD debug element, so "
+                        "`bcdedit /debug on` is refused outright; this path needs Secure Boot off, which is a "
+                        "bigger weakening than the ones this project refuses (see docs/security-on-path.md)")
             return ("this machine was not booted with kernel debugging enabled; run `bcdedit /debug on` "
                     "from an elevated prompt and reboot (see docs/security-on-path.md)")
         if not self.elevated:
@@ -322,6 +355,7 @@ def probe() -> KldbgStatus:
     status = KldbgStatus(
         platform_ok=True,
         debug_boot=kernel_debugger_enabled(),
+        secure_boot=secure_boot_enabled(),
         elevated=is_elevated(),
         service_present=service_present(),
     )
@@ -436,9 +470,14 @@ def report(status: KldbgStatus) -> list[str]:
     """The lines `pcicfg dump` prints about this path when it could not be used."""
     lines = ["  kldbgdrv.sys    Microsoft's Kernel Local Debugging Driver (the security-on path)"]
     if status.debug_boot is not None:
-        lines.append(
-            f"  debug boot      {'on' if status.debug_boot else 'off (bcdedit /debug on, then reboot)'}"
-        )
+        if status.debug_boot:
+            lines.append("  debug boot      on")
+        elif status.secure_boot:
+            lines.append("  debug boot      off, and cannot be turned on: Secure Boot policy protects it")
+        else:
+            lines.append("  debug boot      off (bcdedit /debug on, then reboot)")
+    if status.secure_boot is not None:
+        lines.append(f"  Secure Boot     {'on' if status.secure_boot else 'off'}")
     lines.append(f"  this process    {'elevated' if status.elevated else 'not elevated'}")
     if status.service_present is not None:
         lines.append(f"  kldbgdrv svc    {'installed' if status.service_present else 'not installed'}")

@@ -1,13 +1,36 @@
 # Reading real configuration space on Windows with Memory Integrity left on
 
-This is the route `pcicfg dump` takes. It reads a device's configuration space
-byte for byte on Windows with **Memory Integrity (HVCI) on**, the
-**vulnerable-driver blocklist enforced**, **Secure Boot on** and **test signing
-off**, using a driver Microsoft signed and ships itself.
+This is the route `pcicfg dump` tries first. It reads a device's configuration
+space byte for byte on Windows with **Memory Integrity (HVCI) on**, the
+**vulnerable-driver blocklist enforced** and **test signing off**, using a driver
+Microsoft signed and ships itself.
 
-It is not free. It costs one boot-level change and a reboot, and that change has
-a security cost of its own, spelled out under [The tradeoff](#the-tradeoff)
-below. Read that part before running anything.
+> ## ⚠ Precondition: it requires Secure Boot to be **off**
+>
+> This was measured, not assumed. The path needs `bcdedit /debug on`, and Secure
+> Boot policy protects that BCD element:
+>
+> ```
+> C:\> bcdedit /debug on
+> An error occurred while attempting to modify the debugger settings.
+> The value is protected by Secure Boot policy and cannot be modified or deleted.
+> ```
+>
+> No amount of privilege gets around this; it is settled in firmware. On a
+> Secure Boot machine — which is the default, and was the case here — **this
+> path is closed**, and `pcicfg dump` says so without needing admin rights.
+>
+> **I do not recommend turning Secure Boot off to open it.** Secure Boot is the
+> root of trust that Memory Integrity's own guarantees rest on, so disabling it
+> is a broader weakening than either thing this project set out to avoid. If you
+> are on a Secure Boot machine, use the Linux live USB in
+> [the last section](#if-you-cannot-do-any-of-this) instead: same bytes, no
+> Windows changes at all.
+
+The rest of this document is what to do on a machine where Secure Boot is
+already off, and it is still not free: it costs one boot-level change and a
+reboot, with a security cost of its own spelled out under
+[The tradeoff](#the-tradeoff).
 
 ## Why a driver is needed at all
 
@@ -144,8 +167,12 @@ and both need the debug boot.
 Be clear about what this does and does not change.
 
 **Unchanged.** Memory Integrity stays on. The vulnerable-driver blocklist stays
-enforced. Secure Boot stays on. Test signing stays off. No unsigned, renamed or
-blocklisted driver is loaded. `RwDrv.sys` still cannot load.
+enforced. Test signing stays off. No unsigned, renamed or blocklisted driver is
+loaded. `RwDrv.sys` still cannot load.
+
+**Already off, or this would not have got here.** Secure Boot — see the
+precondition at the top. That is the largest single cost of this route, and on a
+machine where Secure Boot is on it is the reason the route is unavailable.
 
 **Changed.** `bcdedit /debug on` arms the local kernel debugging interface from
 the next boot. Concretely:

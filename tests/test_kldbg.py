@@ -145,6 +145,31 @@ def test_blocker_names_the_first_unmet_condition_in_order():
     assert ok.blocker == "" and ok.usable
 
 
+def test_secure_boot_closes_this_path_and_the_blocker_explains_why():
+    """Measured on the machine this was built for: Secure Boot policy protects the BCD
+    `debug` element, so `bcdedit /debug on` is refused and no privilege changes that.
+    The blocker has to say that rather than send someone to a command that cannot work."""
+    closed = KldbgStatus(platform_ok=True, debug_boot=False, secure_boot=True,
+                         elevated=True, service_present=True)
+    assert "Secure Boot policy" in closed.blocker
+    assert "bigger weakening" in closed.blocker  # and why we do not just turn it off
+
+    # With Secure Boot off, the same state is merely one reboot away.
+    reboot_away = KldbgStatus(platform_ok=True, debug_boot=False, secure_boot=False, elevated=True)
+    assert "reboot" in reboot_away.blocker and "Secure Boot" not in reboot_away.blocker
+
+
+def test_report_distinguishes_debug_off_from_debug_unavailable():
+    from pcicfg.win.kldbg import report as kldbg_report
+
+    closed = " | ".join(kldbg_report(KldbgStatus(platform_ok=True, debug_boot=False, secure_boot=True)))
+    assert "cannot be turned on: Secure Boot policy protects it" in closed
+    assert "Secure Boot     on" in closed
+
+    fixable = " | ".join(kldbg_report(KldbgStatus(platform_ok=True, debug_boot=False, secure_boot=False)))
+    assert "bcdedit /debug on, then reboot" in fixable
+
+
 def test_describe_read_states_the_method_and_both_measurements():
     detail = ConfigRead(
         data=bytes(EXTENDED_FRAME), method="kldbgdrv SysDbgReadPhysical at ECAM 0xC0100000 (spec 7.2.2)",

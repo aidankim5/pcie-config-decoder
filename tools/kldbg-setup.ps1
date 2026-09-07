@@ -188,8 +188,8 @@ if ($Install) {
     } else {
         # A demand-start kernel service: it is loaded when something opens \\.\kldbgdrv,
         # and it does nothing at all unless the machine was booted with debugging on.
-        & sc.exe create $ServiceName type= kernel start= demand binPath= "System32\kldbgdrv.sys" DisplayName= "Kernel Local Debugging Driver" | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "sc.exe create failed with $LASTEXITCODE" }
+        $out = (& sc.exe create $ServiceName type= kernel start= demand binPath= "System32\kldbgdrv.sys" DisplayName= "Kernel Local Debugging Driver" 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { throw "sc.exe create failed with $LASTEXITCODE`n$out" }
         Write-Host "  service $ServiceName registered (kernel, demand start)"
     }
 }
@@ -199,15 +199,17 @@ if ($EnableDebugBoot) {
         Write-Host "Debug boot is already on."
     } else {
         Warn-BitLocker
-        & bcdedit /debug on | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "bcdedit /debug on failed with $LASTEXITCODE" }
+        $out = (& bcdedit /debug on 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { throw "bcdedit /debug on failed with $LASTEXITCODE`n$out" }
+        if ($out) { Write-Host "  $out" }
         Write-Host "Debug boot enabled. A REBOOT is required before it takes effect."
     }
 }
 
 if ($DisableDebugBoot) {
-    & bcdedit /debug off | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "bcdedit /debug off failed with $LASTEXITCODE" }
+    $out = (& bcdedit /debug off 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "bcdedit /debug off failed with $LASTEXITCODE`n$out" }
+    if ($out) { Write-Host "  $out" }
     Write-Host "Debug boot disabled. A reboot is required before it takes effect."
 }
 
