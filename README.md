@@ -330,6 +330,53 @@ driver at all, layer 2 already works: `pcicfg list` reads the
 Status, Link Capabilities, Device Control and Device Capabilities. That is one
 PowerShell query and about five seconds for the whole machine.
 
+### lspci on Windows, and the one thing it knows that a dump does not
+
+pciutils builds and runs on Windows, so I built it from the official source
+(3.13.0, MinGW, `make CC=gcc ZLIB=no DNS=no IDSDIR="" HOST=x86_64-windows`) to
+have an independent second opinion on the same hardware:
+
+```powershell
+lspci.exe -i pci.ids -nn
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA104 [GeForce RTX 3060 Ti Lite Hash Rate] [10de:2489] (rev a1)
+02:00.0 Non-Volatile memory controller [0108]: Samsung Electronics Co Ltd NVMe SSD Controller S4LV008[Pascal] [144d:a80c]
+```
+
+That much works with every security setting on, because the default
+`win32-cfgmgr32` back-end asks Windows' Configuration Manager rather than the
+hardware. What it will not do here is the part I wanted:
+
+```
+lspci.exe -xxxx -s 01:00.0
+WARNING: Cannot show hex-dump of the config space
+```
+
+Same wall as route 3 above: `win32-cfgmgr32` has no real config-space access,
+and the two back-ends that do (`win32-kldbg`, `win32-sysdbg`) both need the
+kernel-debug boot that Secure Boot refuses. **lspci gets no further than
+`pcicfg` does on this machine**, which is the useful confirmation: the limit is
+the platform, not either tool.
+
+It does supply one thing no dump contains. Section 3 notes that BAR *sizes* are
+not determinable from a dump, because sizing a BAR means writing all ones to it
+and reading back which bits stuck — a write, and a destructive one. lspci reports
+them anyway:
+
+```
+Region 0: Memory at 84000000 (32-bit, non-prefetchable) [size=16M]
+Region 2: Memory at 4200000000 (64-bit, prefetchable) [size=32M]
+```
+
+It gets them from Windows' resource manager, which recorded what the firmware
+assigned, instead of probing the device. So the two tools divide cleanly:
+`pcicfg` decodes register semantics from the bytes, and `lspci -vv` supplies the
+resource facts the bytes cannot carry.
+
+On a machine where Secure Boot is off and the debug boot is available,
+`lspci -A win32-kldbg -s 01:00.0 -vvv -xxxx` is also the independent check on the
+256-versus-4096 question, because lspci prints 4096 bytes only if the back-end
+actually returns them and silently falls back to 256 if not.
+
 ---
 
 ## 8. Taught and ahead
